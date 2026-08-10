@@ -2,7 +2,8 @@
 import { computed, reactive, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { accessServiceApi, type CreateAccessServiceInput, type ProductAccessService } from '../api/accessServiceApi'
+import { accessServiceApi, type AccessServiceReadiness, type AccessServiceReadinessCheck,
+  type CreateAccessServiceInput, type ProductAccessService, type ReadinessStatus } from '../api/accessServiceApi'
 import { integrationAssetApi } from '../api/integrationAssetApi'
 import { serviceRouteApi, type DryRunResult, type RoutePolicyView, type RouteTargetConfig } from '../api/serviceRouteApi'
 import { accessChannelApi } from '../api/accessChannelApi'
@@ -25,6 +26,8 @@ const productsQuery = useQuery({ queryKey: ['provider-products'], queryFn: ({ si
 const services = computed(() => servicesQuery.data.value ?? [])
 const createDialog = ref(false)
 const detailService = ref<ProductAccessService | null>(null)
+const readiness = ref<AccessServiceReadiness | null>(null)
+const readinessLoading = ref(false)
 const targetDialog = ref(false)
 const routeDialog = ref(false)
 const routeView = ref<RoutePolicyView | null>(null)
@@ -84,7 +87,29 @@ function openCreate(): void {
   if (!standardResponseFields.value.length) standardResponseFields.value = [emptyStandardField()]
   createDialog.value = true
 }
-function openDetail(service: unknown): void { detailService.value = service as ProductAccessService }
+async function loadReadiness(): Promise<void> {
+  if (!detailService.value) return
+  readinessLoading.value = true
+  try { readiness.value = await accessServiceApi.readiness(detailService.value.id) }
+  catch { readiness.value = null; ElMessage.error('接入就绪检查读取失败') }
+  finally { readinessLoading.value = false }
+}
+function openDetail(service: unknown): void {
+  detailService.value = service as ProductAccessService
+  readiness.value = null
+  void loadReadiness()
+}
+function readinessLabel(status: ReadinessStatus): string {
+  if (status === 'READY') return '可以验证'
+  if (status === 'READY_WITH_WARNINGS') return '可以验证，有提示'
+  return '暂不能验证'
+}
+function readinessTag(status: ReadinessStatus): 'success' | 'warning' | 'danger' {
+  return status === 'READY' ? 'success' : status === 'READY_WITH_WARNINGS' ? 'warning' : 'danger'
+}
+function checkIcon(check: AccessServiceReadinessCheck): string {
+  return check.status === 'PASS' ? '✓' : check.status === 'WARN' ? '!' : '×'
+}
 async function openTarget(): Promise<void> {
   errorMessage.value = ''; targetForm.providerId = undefined; targetForm.providerProductId = undefined
   targetForm.providerContractId = undefined; targetForm.providerContractVersionId = undefined
@@ -181,7 +206,7 @@ const addTarget = useMutation({
     transportVersionId: targetForm.transportVersionId!,
     targetName: targetForm.targetName.trim(), ownerCode: targetForm.ownerCode.trim(),
     requestMappings: requestMappingRows.value, responseMappings: responseMappingRows.value }),
-  onSuccess: async () => { targetDialog.value = false; await queryClient.invalidateQueries({ queryKey: ['product-services'] }); detailService.value = await accessServiceApi.get(detailService.value!.id); ElMessage.success('第三方实现、字段映射和可执行版本已发布') },
+  onSuccess: async () => { targetDialog.value = false; await queryClient.invalidateQueries({ queryKey: ['product-services'] }); detailService.value = await accessServiceApi.get(detailService.value!.id); await loadReadiness(); ElMessage.success('第三方实现、字段映射和可执行版本已发布') },
   onError: error => { errorMessage.value = error instanceof Error ? error.message : '添加失败' }
 })
 function submitTarget(): void {
@@ -221,7 +246,7 @@ const saveRoute = useMutation({ mutationFn: () => serviceRouteApi.saveDraft(deta
   onSuccess: async () => { routeView.value = await serviceRouteApi.get(detailService.value!.id); ElMessage.success('已保存新的路由草稿版本') },
   onError: error => { errorMessage.value = error instanceof Error ? error.message : '路由保存失败' } })
 const publishRoute = useMutation({ mutationFn: (versionId: number) => serviceRouteApi.publish(detailService.value!.id, versionId),
-  onSuccess: async () => { routeView.value = await serviceRouteApi.get(detailService.value!.id); ElMessage.success('路由版本已发布，等待后续编译进 Bundle') },
+  onSuccess: async () => { routeView.value = await serviceRouteApi.get(detailService.value!.id); await loadReadiness(); ElMessage.success('路由版本已发布，可以返回详情查看就绪状态') },
   onError: error => { errorMessage.value = error instanceof Error ? error.message : '发布失败' } })
 const runDryRoute = useMutation({ mutationFn: () => {
   const published = routeView.value?.versions.find(item => item.lifecycleStatus === 'PUBLISHED')
@@ -251,7 +276,35 @@ const runDryRoute = useMutation({ mutationFn: () => {
       <template #footer><el-button @click="createDialog = false">取消</el-button><el-button type="primary" :loading="createService.isPending.value" @click="submitCreate">创建服务和标准报文</el-button></template>
     </el-dialog>
 
-    <el-drawer :model-value="detailService !== null" size="780px" title="接入服务详情" @close="detailService = null"><template v-if="detailService"><div class="product-detail-title"><span>业务调用编码</span><strong class="mono">{{ detailService.serviceCode }}</strong><p>{{ detailService.serviceName }} · {{ detailService.description || '暂无说明' }}</p></div><div class="drawer-section"><h3>业务标准报文</h3><el-table :data="detailService.contracts" size="small"><el-table-column label="方向"><template #default="{ row }">{{ row.kind === 'REQUEST' ? '业务请求' : '业务返回' }}</template></el-table-column><el-table-column prop="contractName" label="名称" /><el-table-column label="版本"><template #default="{ row }"><el-tag type="success">{{ row.semanticVersion }} · {{ row.lifecycleStatus }}</el-tag></template></el-table-column></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>第三方实现</strong><span>同一个 serviceCode 可以绑定多家厂商接口。</span></div><el-button type="primary" @click="openTarget">＋ 添加第三方实现</el-button></div><el-empty v-if="!detailService.targets.length" description="尚未添加第三方实现" /><el-table v-else :data="detailService.targets" size="small"><el-table-column prop="targetName" label="实现名称" /><el-table-column prop="providerName" label="提供方" /><el-table-column prop="interfaceName" label="第三方接口" /><el-table-column prop="status" label="状态" width="90" /></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>多目标路由</strong><span>先匹配条件和健康状态，再选最小优先级组，最后按权重选择。</span></div><el-button type="primary" :disabled="!detailService.targets.length" @click="openRoute">配置路由</el-button></div></div></template></el-drawer>
+    <el-drawer :model-value="detailService !== null" size="820px" title="接入服务详情" @close="detailService = null">
+      <template v-if="detailService">
+        <div class="product-detail-title"><span>业务调用编码</span><strong class="mono">{{ detailService.serviceCode }}</strong><p>{{ detailService.serviceName }} · {{ detailService.description || '暂无说明' }}</p></div>
+        <div v-loading="readinessLoading" class="drawer-section readiness-panel">
+          <div class="readiness-heading"><div><h3>接入就绪检查</h3><p>平台自动检查是否已经具备端到端验证条件。</p></div><el-button link type="primary" @click="loadReadiness">重新检查</el-button></div>
+          <template v-if="readiness">
+            <div class="readiness-summary" :class="`is-${readiness.status.toLowerCase()}`">
+              <div><el-tag :type="readinessTag(readiness.status)" effect="dark">{{ readinessLabel(readiness.status) }}</el-tag><strong>{{ readiness.summary }}</strong></div>
+              <router-link v-if="readiness.status !== 'BLOCKED'" :to="readiness.verificationPath"><el-button type="success">进入验证与发布</el-button></router-link>
+            </div>
+            <div class="readiness-check-list">
+              <div v-for="item in readiness.checks" :key="item.code" class="readiness-check" :class="`is-${item.status.toLowerCase()}`">
+                <span class="readiness-check-icon">{{ checkIcon(item) }}</span><div><strong>{{ item.name }}</strong><small>{{ item.detail }}</small></div>
+                <router-link v-if="item.status !== 'PASS'" :to="item.actionPath">去补齐</router-link>
+              </div>
+            </div>
+            <el-collapse v-if="readiness.targets.length" class="target-readiness">
+              <el-collapse-item v-for="target in readiness.targets" :key="target.bindingId" :name="target.bindingId">
+                <template #title><div class="target-readiness-title"><strong>{{ target.targetName }}</strong><span>{{ target.providerName }} · {{ target.interfaceName }}</span><el-tag size="small" :type="readinessTag(target.status)">{{ readinessLabel(target.status) }}</el-tag></div></template>
+                <div v-for="item in target.checks" :key="item.code" class="readiness-check compact" :class="`is-${item.status.toLowerCase()}`"><span class="readiness-check-icon">{{ checkIcon(item) }}</span><div><strong>{{ item.name }}</strong><small>{{ item.detail }}</small></div><router-link v-if="item.status !== 'PASS'" :to="item.actionPath">去补齐</router-link></div>
+              </el-collapse-item>
+            </el-collapse>
+          </template>
+        </div>
+        <div class="drawer-section"><h3>业务标准报文</h3><el-table :data="detailService.contracts" size="small"><el-table-column label="方向"><template #default="{ row }">{{ row.kind === 'REQUEST' ? '业务请求' : '业务返回' }}</template></el-table-column><el-table-column prop="contractName" label="名称" /><el-table-column label="版本"><template #default="{ row }"><el-tag type="success">{{ row.semanticVersion }} · 已发布</el-tag></template></el-table-column></el-table></div>
+        <div class="drawer-section"><div class="asset-toolbar"><div><strong>第三方实现</strong><span>同一个业务调用编码可以绑定多家厂商接口。</span></div><el-button type="primary" @click="openTarget">＋ 添加第三方实现</el-button></div><el-empty v-if="!detailService.targets.length" description="尚未添加第三方实现" /><el-table v-else :data="detailService.targets" size="small"><el-table-column prop="targetName" label="实现名称" /><el-table-column prop="providerName" label="提供方" /><el-table-column prop="interfaceName" label="第三方接口" /><el-table-column label="状态" width="90"><template #default="{ row }">{{ row.status === 'ACTIVE' ? '已启用' : '已停用' }}</template></el-table-column></el-table></div>
+        <div class="drawer-section"><div class="asset-toolbar"><div><strong>多目标调用选择</strong><span>先匹配条件和健康状态，再选最小优先级组，最后按权重选择。</span></div><el-button type="primary" :disabled="!detailService.targets.length" @click="openRoute">配置调用选择</el-button></div></div>
+      </template>
+    </el-drawer>
 
     <el-dialog v-model="targetDialog" class="target-provision-dialog" title="添加可执行的第三方实现" width="1180px" :close-on-click-modal="false">
       <el-alert type="success" :closable="false" show-icon title="选择通道和接口调用版本后，平台自动生成执行地址并继承通道认证；提交后自动发布双向映射和可执行配置。" />
@@ -286,3 +339,28 @@ const runDryRoute = useMutation({ mutationFn: () => {
       <template #footer><el-button @click="routeDialog = false">关闭</el-button><el-button type="primary" :loading="saveRoute.isPending.value" @click="saveRoute.mutate()">保存新草稿版本</el-button></template></el-dialog>
   </section>
 </template>
+
+<style scoped>
+.readiness-panel { min-height: 132px; }
+.readiness-heading,.readiness-summary,.target-readiness-title { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.readiness-heading h3 { margin:0; }
+.readiness-heading p { margin:5px 0 0; color:var(--el-text-color-secondary); font-size:13px; }
+.readiness-summary { margin:14px 0; padding:14px 16px; border-radius:8px; background:#f1f8f5; border:1px solid #bfe3d2; }
+.readiness-summary.is-blocked { background:#fff4f3; border-color:#f3c6c2; }
+.readiness-summary.is-ready_with_warnings { background:#fff8eb; border-color:#efdaa9; }
+.readiness-summary > div { display:flex; align-items:center; gap:10px; }
+.readiness-check-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.readiness-check { display:grid; grid-template-columns:24px 1fr auto; gap:8px; align-items:center; padding:10px; border:1px solid var(--el-border-color-lighter); border-radius:6px; }
+.readiness-check.compact { margin:6px 0; }
+.readiness-check-icon { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; color:#fff; background:#35a777; font-weight:700; }
+.readiness-check.is-warn .readiness-check-icon { background:#d99a2b; }
+.readiness-check.is-block .readiness-check-icon { background:#d9534f; }
+.readiness-check div { min-width:0; }
+.readiness-check strong,.readiness-check small { display:block; }
+.readiness-check small { margin-top:3px; color:var(--el-text-color-secondary); line-height:1.4; }
+.readiness-check a { color:var(--el-color-primary); white-space:nowrap; font-size:13px; }
+.target-readiness { margin-top:12px; }
+.target-readiness-title { width:100%; padding-right:10px; justify-content:flex-start; }
+.target-readiness-title span { flex:1; color:var(--el-text-color-secondary); font-size:13px; }
+@media (max-width: 760px) { .readiness-check-list { grid-template-columns:1fr; } .readiness-summary { align-items:flex-start; flex-direction:column; } }
+</style>

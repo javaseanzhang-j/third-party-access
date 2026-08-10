@@ -16,6 +16,19 @@ export interface ProductAccessService {
   ownerCode: string; status: 'ACTIVE' | 'INACTIVE'; rowVersion: number
   contracts: ServiceContractView[]; targets: AdapterTargetView[]
 }
+export type ReadinessStatus = 'READY' | 'READY_WITH_WARNINGS' | 'BLOCKED'
+export type ReadinessCheckStatus = 'PASS' | 'WARN' | 'BLOCK'
+export interface AccessServiceReadinessCheck {
+  code: string; name: string; status: ReadinessCheckStatus; detail: string; actionPath: string
+}
+export interface AccessServiceTargetReadiness {
+  bindingId: number; targetName: string; providerName: string; interfaceName: string
+  status: ReadinessStatus; checks: AccessServiceReadinessCheck[]
+}
+export interface AccessServiceReadiness {
+  serviceId: number; serviceCode: string; status: ReadinessStatus; summary: string; verificationPath: string
+  checks: AccessServiceReadinessCheck[]; targets: AccessServiceTargetReadiness[]
+}
 export interface CreateAccessServiceInput {
   serviceCode: string; serviceName: string; description: string | null; invocationMode: InvocationMode
   idempotencyClass: IdempotencyClass; dataClassification: DataClassification; ownerCode: string
@@ -49,6 +62,8 @@ const headers = { 'X-Operator': operator }
 export const accessServiceApi = {
   list: (signal?: AbortSignal) => getJson<ProductAccessService[]>('/control/v1/product-model/services', signal),
   get: (id: number, signal?: AbortSignal) => getJson<ProductAccessService>(`/control/v1/product-model/services/${id}`, signal),
+  readiness: (id: number, signal?: AbortSignal) => getJson<AccessServiceReadiness>(
+    `/control/v1/product-model/services/${id}/readiness`, signal),
   create: (input: CreateAccessServiceInput) => postJson<ProductAccessService>('/control/v1/product-model/services', input, headers),
   addTarget: (id: number, input: AddAdapterTargetInput) => postJson<AdapterTargetView>(
     `/control/v1/product-model/services/${id}/targets`, input, headers),

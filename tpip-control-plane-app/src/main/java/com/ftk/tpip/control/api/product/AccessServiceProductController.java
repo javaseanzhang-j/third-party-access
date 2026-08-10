@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ftk.tpip.catalog.domain.model.*;
 import com.ftk.tpip.control.application.product.AccessServiceProductApplicationService;
 import com.ftk.tpip.control.application.product.AccessServiceProductApplicationService.*;
+import com.ftk.tpip.control.application.product.AccessServiceReadinessApplicationService;
+import com.ftk.tpip.control.application.product.AccessServiceReadinessApplicationService.ReadinessView;
 import com.ftk.tpip.integration.domain.model.MappingTargetType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -18,10 +20,18 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/control/v1/product-model/services")
 public class AccessServiceProductController {
     private final AccessServiceProductApplicationService service;
-    public AccessServiceProductController(AccessServiceProductApplicationService service) { this.service = service; }
+    private final AccessServiceReadinessApplicationService readiness;
+    public AccessServiceProductController(AccessServiceProductApplicationService service,
+            AccessServiceReadinessApplicationService readiness) {
+        this.service = service;
+        this.readiness = readiness;
+    }
 
     @GetMapping public List<AccessServiceView> list() { return service.list(); }
     @GetMapping("/{id}") public AccessServiceView get(@PathVariable @Min(1) long id) { return service.get(id); }
+    @GetMapping("/{id}/readiness") public ReadinessView readiness(@PathVariable @Min(1) long id) {
+        return readiness.readiness(id);
+    }
     @PostMapping public ResponseEntity<AccessServiceView> create(@Valid @RequestBody CreateRequest request,
             @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
         AccessServiceView created = service.create(new CreateCommand(request.serviceCode(), request.serviceName(),

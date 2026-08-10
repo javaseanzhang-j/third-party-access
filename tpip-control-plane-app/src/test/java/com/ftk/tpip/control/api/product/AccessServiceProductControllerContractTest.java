@@ -20,6 +20,8 @@ class AccessServiceProductControllerContractTest {
                 .getDeclaredMethod("provisionBusinessTarget", long.class,
                         AccessServiceProductController.BusinessProvisionTargetRequest.class, String.class)
                 .getAnnotation(PostMapping.class).value());
+        assertArrayEquals(new String[]{"/{id}/readiness"}, AccessServiceProductController.class
+                .getDeclaredMethod("readiness", long.class).getAnnotation(GetMapping.class).value());
         org.junit.jupiter.api.Assertions.assertEquals(List.class,
                 AccessServiceProductController.class.getDeclaredMethod("list").getReturnType());
     }

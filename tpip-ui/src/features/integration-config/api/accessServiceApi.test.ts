@@ -27,6 +27,15 @@ describe('access service product api', () => {
     const [path] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(path).toBe('/control/v1/product-model/services/7/targets')
   })
+  it('reads the product-facing readiness result', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ serviceId: 7, status: 'READY' }), {
+      status: 200, headers: { 'Content-Type': 'application/json' }
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    await accessServiceApi.readiness(7)
+    const [path] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(path).toBe('/control/v1/product-model/services/7/readiness')
+  })
   it('provisions mappings, channel and published binding version in one command', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ bindingVersionId: 19 }), {
       status: 201, headers: { 'Content-Type': 'application/json' }
