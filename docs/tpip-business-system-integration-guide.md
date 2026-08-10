@@ -356,9 +356,31 @@ CREATED → PREHEAT/READY → ACTIVE
 ```http
 POST http://127.0.0.1:18081/integration/v1/operations/{operationCode}:invoke
 Content-Type: application/json
+X-TPIP-App-Key: <已发布的调用方App Key>
+X-TPIP-Timestamp: <Unix epoch毫秒>
+X-TPIP-Nonce: <每次请求唯一随机值>
+X-TPIP-Signature: <HMAC-SHA256小写十六进制>
+X-TPIP-Scenario: <可选业务场景>
+X-Request-Id: <请求追踪号>
 ```
 
 业务系统只调用 Runtime，不调用 `/control/v1/**` 或 `/runtime-config/v1/**`。
+
+调用前需要在“服务管理 → 调用方管理”创建项目和应用，发布调用凭据，并为应用发布当前`operationCode`的服务授权。
+Runtime使用已发布授权快照，不读取Control Plane草稿配置。
+
+签名原文使用换行连接以下内容：
+
+```text
+POST
+/integration/v1/operations/{operationCode}:invoke
+{operationCode}
+{X-TPIP-Timestamp}
+{X-TPIP-Nonce}
+{请求体原始字节的SHA-256小写十六进制}
+```
+
+使用App Secret对上述UTF-8文本计算HMAC-SHA256，并把小写十六进制结果放入`X-TPIP-Signature`。签名完成后不得重新格式化请求体，否则摘要会变化。
 
 ### 6.2 请求
 
@@ -437,6 +459,10 @@ Content-Type: application/json
 | 200 | `DEADLINE_EXCEEDED` | 业务截止时间已过 | 不重试或使用新的业务请求 |
 | 200 | `PIPELINE_FAILED` | 未分类运行异常 | 告警并人工分析 |
 | 503 | `TPIP_RUNTIME_BUNDLE_UNAVAILABLE` | 没有可用 Bundle/Route/LKG | 短暂退避后重试并告警 |
+| 401 | `CONSUMER_UNKNOWN`、`SIGNATURE_INVALID`、`REQUEST_REPLAYED` | 调用身份、签名或防重放检查失败 | 不重试，检查凭据、时钟和nonce生成 |
+| 403 | `SERVICE_NOT_GRANTED` | 当前应用没有服务授权 | 在调用方管理中申请并发布授权 |
+| 403 | `SCENARIO_NOT_ALLOWED`、`SOURCE_NOT_ALLOWED` | 场景或来源网络不在授权范围 | 修正调用场景或授权条件 |
+| 503 | `CONSUMER_AUTHORIZATION_UNAVAILABLE` | 已发布授权快照或Redis防重放不可用 | 短暂退避并告警，不能绕过鉴权 |
 
 只有 `IDEMPOTENT` 或已经建立可靠幂等键的操作才允许自动重试。不要因为 HTTP 200 就把业务失败当成功。
 
@@ -446,6 +472,11 @@ Content-Type: application/json
 curl -sS -X POST \
   http://127.0.0.1:18081/integration/v1/operations/customer.profile.lookup:invoke \
   -H 'Content-Type: application/json' \
+  -H 'X-TPIP-App-Key: tpip_xxxxxxxxxxxxxxxxxxxxxxxx' \
+  -H 'X-TPIP-Timestamp: 1786348800000' \
+  -H 'X-TPIP-Nonce: 64d73f781aa74cfa' \
+  -H 'X-TPIP-Signature: <按上述规则计算的签名>' \
+  -H 'X-Request-Id: manual-000001' \
   --data-binary '{
     "meta": {
       "requestId": "manual-000001",
@@ -464,13 +495,14 @@ curl -sS -X POST \
 业务系统可以用 Spring `RestClient`、`WebClient` 或 JDK `HttpClient` 封装统一 TPIP Client。封装层必须：
 
 1. 生成并记录 `requestId/traceId`；
-2. 设置整体调用超时；
-3. 区分 HTTP 503 和 HTTP 200 业务失败；
-4. 校验 `result.success`；
-5. 将 `result.code` 映射为业务系统内部受控异常；
-6. 仅对允许幂等的错误执行有界重试；
-7. 日志脱敏，不打印 Secret 或完整敏感报文；
-8. 指标至少包含 Operation、结果码、耗时和调用方，不把高基数字段作为标签。
+2. 生成timestamp和唯一nonce，对最终请求体原始字节计算HMAC-SHA256；
+3. 设置整体调用超时；
+4. 区分HTTP 401、403、503和HTTP 200业务失败；
+5. 校验 `result.success`；
+6. 将 `result.code` 映射为业务系统内部受控异常；
+7. 仅对允许幂等的错误执行有界重试，每次重试必须使用新的nonce；
+8. 日志脱敏，不打印App Secret、签名原文或完整敏感报文；
+9. 指标至少包含Operation、结果码、耗时和调用方，不把高基数字段作为标签。
 
 不建议每个业务模块各写一套 HTTP 调用代码。应在业务系统内部建立一个小型 `TpipClient` 适配层，但该适配层只封装
 TPIP 标准调用契约，不重新引入供应商 SDK 或第三方字段。

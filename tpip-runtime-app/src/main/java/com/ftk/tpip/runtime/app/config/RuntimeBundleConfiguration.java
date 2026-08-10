@@ -23,6 +23,11 @@ import com.ftk.tpip.adapters.runtime.EnvironmentSecretResolver;
 import com.ftk.tpip.runtime.app.observability.MicrometerRuntimeInvocationObserver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import com.ftk.tpip.runtime.access.ConsumerRequestAuthorizer;
+import com.ftk.tpip.runtime.app.infrastructure.HttpConsumerAccessSnapshotSource;
+import com.ftk.tpip.runtime.app.infrastructure.RedisConsumerNonceStore;
+import com.ftk.tpip.runtime.app.infrastructure.ConsumerInvocationAuditClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +35,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties(RuntimeBundleProperties.class)
 public class RuntimeBundleConfiguration {
+    @Bean HttpConsumerAccessSnapshotSource consumerAccessSnapshotSource(RuntimeBundleProperties properties,ObjectMapper json){
+        return new HttpConsumerAccessSnapshotSource(properties.getControlPlaneBaseUri(),properties.getConnectTimeout(),
+                properties.getReadTimeout(),properties.getConsumerAccessTtl(),properties.getConsumerAccessMaxStale(),json,Clock.systemUTC());
+    }
+    @Bean RedisConsumerNonceStore consumerNonceStore(StringRedisTemplate redis){return new RedisConsumerNonceStore(redis);}
+    @Bean ConsumerRequestAuthorizer consumerRequestAuthorizer(HttpConsumerAccessSnapshotSource snapshots,SecretResolver secrets,
+            RedisConsumerNonceStore nonces,RuntimeBundleProperties properties){return new ConsumerRequestAuthorizer(snapshots,secrets,nonces,Clock.systemUTC(),properties.getConsumerTimestampSkew());}
+    @Bean ConsumerInvocationAuditClient consumerInvocationAuditClient(RuntimeBundleProperties properties,ObjectMapper json){
+        return new ConsumerInvocationAuditClient(properties.getControlPlaneBaseUri(),properties.getConnectTimeout(),properties.getReadTimeout(),json);}
     @Bean
     ConfiguredBundleReferenceRegistry bundleReferenceRegistry(RuntimeBundleProperties properties) {
         return new ConfiguredBundleReferenceRegistry(properties.getBundles());

@@ -443,3 +443,19 @@ ConsumerApplication + ConsumerCredentialVersion + ConsumerServiceGrantVersion
 TPIP 保留早期“白名单限制”的业务思想，但正式产品名称调整为“调用方服务授权”。平台采用“调用方项目 → 调用方应用 → 调用凭据 → 服务授权 → 授权策略版本”的模型。
 
 第一阶段以 `appKey + HMAC-SHA256 + serviceCode 授权` 落地；IP 白名单作为附加限制；调用方不能直接指定第三方厂商；Runtime 只读取已发布、不可变、可审计的授权快照。未来引入 OAuth2、OIDC/JWT、API 网关或 mTLS 时，仅替换身份认证机制，不推翻服务授权模型。
+
+## 16. 第一阶段实施状态
+
+第一阶段已在 `feature/business-oriented-integration-redesign` 分支落地：
+
+- V53迁移建立项目、应用、凭据版本、授权、授权版本和调用审计六张表；
+- Control Plane提供调用方项目、应用、凭据、授权及发布接口；
+- 前端“服务管理 → 调用方管理”提供完整业务配置流程；
+- App Key由平台生成，App Secret只保存`env://TPIP_SECRET_*`引用；
+- Control Plane输出`tpip.consumer-access/v1`已发布授权快照；
+- Runtime缓存授权快照，Control Plane短暂不可用时在最大陈旧窗口内使用最后可用快照，超过窗口后安全拒绝；
+- Runtime统一调用入口强制校验HMAC-SHA256、五分钟时间窗、Redis nonce、`serviceCode`、授权有效期、业务场景和IP/CIDR；
+- 浏览器调用控制台使用Web Crypto在本地生成签名，输入的密钥不发送给Control Plane；
+- Runtime将允许和拒绝结果写入调用授权审计，不记录Secret和完整业务报文。
+
+当前QPS、突发限制和每日配额字段已经进入授权资产模型，但运行时限流属于第二阶段，暂未启用。授权快照默认缓存30秒、最大陈旧10分钟，时间戳允许偏差5分钟，可通过Runtime环境变量调整。

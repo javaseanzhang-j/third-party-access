@@ -16,7 +16,8 @@ describe('deployment and runtime api', () => {
   it('returns structured runtime errors without hiding the HTTP status', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ code: 'TPIP_RUNTIME_BUNDLE_UNAVAILABLE', message: 'no route' }), { status: 503, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
-    const result = await runtimeInvokeApi.invoke('customer.lookup', { meta: { requestId: 'req-1', caller: 'local-ui', tenantId: null, idempotencyKey: null, deadline: null, attributes: {} }, payload: { customerId: 'C1001' } })
+    const result = await runtimeInvokeApi.invoke('customer.lookup', { meta: { requestId: 'req-1', caller: 'local-ui', tenantId: null, idempotencyKey: null, deadline: null, attributes: {} }, payload: { customerId: 'C1001' } },
+      { appKey: 'tpip_test', appSecret: 'local-test-secret', scenario: null })
     expect(result.httpStatus).toBe(503)
     expect(result.document.code).toBe('TPIP_RUNTIME_BUNDLE_UNAVAILABLE')
   })

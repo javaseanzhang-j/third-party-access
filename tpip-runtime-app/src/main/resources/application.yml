@@ -27,6 +27,9 @@ tpip:
     route-max-stale: ${TPIP_ROUTE_MAX_STALE:5m}
     max-provider-response-bytes: ${TPIP_MAX_PROVIDER_RESPONSE_BYTES:2097152}
     audit-enabled: ${TPIP_RUNTIME_AUDIT_ENABLED:true}
+    consumer-access-ttl: ${TPIP_CONSUMER_ACCESS_TTL:30s}
+    consumer-access-max-stale: ${TPIP_CONSUMER_ACCESS_MAX_STALE:10m}
+    consumer-timestamp-skew: ${TPIP_CONSUMER_TIMESTAMP_SKEW:5m}
     bundles: []
 
 management:

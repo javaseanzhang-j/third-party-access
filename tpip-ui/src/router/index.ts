@@ -47,6 +47,12 @@ export const router = createRouter({
       component: () => import('@/features/integration-config/pages/AccessServicePage.vue')
     },
     {
+      path: '/integration-assets/consumers',
+      name: 'consumer-access',
+      meta: { title: '调用方管理' },
+      component: () => import('@/features/integration-config/pages/ConsumerAccessPage.vue')
+    },
+    {
       path: '/integration-assets/canonical',
       name: 'canonical-assets',
       meta: { title: '业务标准接口' },

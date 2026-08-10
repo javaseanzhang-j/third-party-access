@@ -301,7 +301,20 @@ Bundle，Runtime 不读取策略配置表。
 
 ## 9. 常用操作流程
 
-### 9.0 检查接入服务是否可以验证
+### 9.0 配置调用方服务授权
+
+进入“服务管理 → 调用方管理”，依次完成：
+
+1. 创建调用方项目；
+2. 在项目下创建实际发起请求的调用方应用；
+3. 新建调用凭据版本，填写`env://TPIP_SECRET_*`引用并发布；
+4. 将需要使用的接入服务授权给该应用并发布授权版本；
+5. 在Runtime进程启动环境中设置Secret引用对应的变量；
+6. 在统一调用控制台填写App Key、本地签名密钥和授权场景，执行调用验证。
+
+App Secret不会保存到数据库。发布授权后Runtime最多在30秒缓存刷新周期内读取到最新快照；撤销凭据同样受该缓存窗口影响。Redis必须可用，Runtime使用它记录nonce并阻止签名请求重放。
+
+### 9.1 检查接入服务是否可以验证
 
 完成业务标准报文和第三方实现后，进入“接入配置 → 接入服务”，点击“查看与管理”。详情顶部的“接入就绪检查”会自动给出结论：
 
@@ -311,7 +324,7 @@ Bundle，Runtime 不读取策略配置表。
 
 当服务只有一家第三方实现时无需配置调用选择；配置两家及以上实现后，必须在“多目标调用选择”中保存并发布覆盖全部启用实现的规则。新增实现或发布路由后，页面会自动重新检查，也可以手工点击“重新检查”。
 
-### 9.1 新增第三方接口
+### 9.2 新增第三方接口
 
 按以下顺序配置：
 
@@ -329,7 +342,7 @@ Deployment Preheat/Activate → Runtime Invoke
 [`TPIP 客户资料查询：全流程 UI 配置实例`](tpip-customer-profile-lookup-ui-tutorial.md)。该文档提供可直接复制的名称、
 编码、Schema、JSONPath Mapping、Policy DSL、Fixture、Workspace、Bundle、Deployment 和 Runtime 请求。
 
-### 9.2 修改第三方字段或地址
+### 9.3 修改第三方字段或地址
 
 不要修改已发布版本：
 
@@ -342,7 +355,7 @@ Deployment Preheat/Activate → Runtime Invoke
 
 业务系统继续使用原 `operationCode` 和 Canonical Contract；仅 Canonical Contract 真正发生业务语义变化时才要求业务改造。
 
-### 9.3 发布封板
+### 9.4 发布封板
 
 ```bash
 TPIP_RELEASE_EVIDENCE_DIR=/absolute/release/root \

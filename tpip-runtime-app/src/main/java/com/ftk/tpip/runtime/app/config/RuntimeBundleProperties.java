@@ -22,6 +22,9 @@ public class RuntimeBundleProperties {
     private Duration routeMaxStale = Duration.ofMinutes(5);
     private int maxProviderResponseBytes = 2 * 1024 * 1024;
     private boolean auditEnabled = true;
+    private Duration consumerAccessTtl = Duration.ofSeconds(30);
+    private Duration consumerAccessMaxStale = Duration.ofMinutes(10);
+    private Duration consumerTimestampSkew = Duration.ofMinutes(5);
     private List<Route> bundles = new ArrayList<>();
 
     public URI getControlPlaneBaseUri() { return controlPlaneBaseUri; }
@@ -50,6 +53,12 @@ public class RuntimeBundleProperties {
     public void setMaxProviderResponseBytes(int value) { maxProviderResponseBytes = value; }
     public boolean isAuditEnabled() { return auditEnabled; }
     public void setAuditEnabled(boolean value) { auditEnabled = value; }
+    public Duration getConsumerAccessTtl(){return consumerAccessTtl;}
+    public void setConsumerAccessTtl(Duration value){consumerAccessTtl=value;}
+    public Duration getConsumerAccessMaxStale(){return consumerAccessMaxStale;}
+    public void setConsumerAccessMaxStale(Duration value){consumerAccessMaxStale=value;}
+    public Duration getConsumerTimestampSkew(){return consumerTimestampSkew;}
+    public void setConsumerTimestampSkew(Duration value){consumerTimestampSkew=value;}
     public List<Route> getBundles() { return bundles; }
     public void setBundles(List<Route> value) { bundles = value == null ? new ArrayList<>() : value; }
 

@@ -2,6 +2,8 @@ package com.ftk.tpip.control.configuration;
 
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcCredentialRefRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAccessChannelRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.consumer.JdbcConsumerAccessRepository;
+import com.ftk.tpip.consumer.domain.repository.ConsumerAccessRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcProviderProductRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcCredentialProfileRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAuthenticationTemplateRepository;
@@ -121,6 +123,11 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class PersistenceConfiguration {
+
+    @Bean
+    ConsumerAccessRepository consumerAccessRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        return new JdbcConsumerAccessRepository(jdbcTemplate, objectMapper);
+    }
 
     @Bean
     AccessChannelRepository accessChannelRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
