@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CanonicalContractVersionLifecycleException extends RuntimeException{public CanonicalContractVersionLifecycleException(long id,String reason){super("Canonical contract version "+id+" lifecycle conflict: "+reason);}}

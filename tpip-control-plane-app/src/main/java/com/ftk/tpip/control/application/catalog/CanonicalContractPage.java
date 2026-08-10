@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.catalog;import com.ftk.tpip.catalog.domain.model.CanonicalContract;import java.util.List;public record CanonicalContractPage(List<CanonicalContract>items,int page,int size,long totalElements){}

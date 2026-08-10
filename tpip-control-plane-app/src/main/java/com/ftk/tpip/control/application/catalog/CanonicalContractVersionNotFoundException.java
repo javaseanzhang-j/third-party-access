@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.catalog;public class CanonicalContractVersionNotFoundException extends RuntimeException{public CanonicalContractVersionNotFoundException(long contractId,long versionId){super("Canonical contract version not found: "+versionId+" under contract "+contractId);}}

@@ -1,0 +1,3 @@
+package com.ftk.tpip.release.domain.model;
+import static org.junit.jupiter.api.Assertions.*;import com.ftk.tpip.shared.AssetCode;import org.junit.jupiter.api.Test;
+class ConfigurationWorkspaceTest{@Test void createsDraftWorkspace(){var w=ConfigurationWorkspace.draft(AssetCode.of("refund.provider-a.prod"),"Refund release",null,"prod",WorkspaceRiskLevel.HIGH,"payments");assertEquals(WorkspaceLifecycleStatus.DRAFT,w.lifecycleStatus());assertEquals("prod",w.environmentCode());}@Test void rejectsInvalidEnvironment(){assertThrows(IllegalArgumentException.class,()->ConfigurationWorkspace.draft(AssetCode.of("refund.provider-a.prod"),"Refund",null,"PROD",WorkspaceRiskLevel.LOW,"payments"));}}

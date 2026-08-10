@@ -1,0 +1,2 @@
+package com.ftk.tpip.catalog.domain.model;
+public record CanonicalContractQuery(Long operationId,ContractKind contractKind,String keyword,CanonicalContractStatus status,int offset,int limit){public CanonicalContractQuery{if(operationId!=null&&operationId<=0)throw new IllegalArgumentException("operationId must be positive");keyword=keyword==null||keyword.isBlank()?null:keyword.trim();if(offset<0)throw new IllegalArgumentException("offset must not be negative");if(limit<1||limit>200)throw new IllegalArgumentException("limit must be between 1 and 200");}}

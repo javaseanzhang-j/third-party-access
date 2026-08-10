@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CatalogCodeAlreadyExistsException extends RuntimeException{public CatalogCodeAlreadyExistsException(String type,String code){super(type+" already exists: "+code);}}

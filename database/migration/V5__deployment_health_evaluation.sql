@@ -1,0 +1,22 @@
+CREATE TABLE tpip_deployment_health_evaluation (
+    id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    deployment_id           BIGINT UNSIGNED NOT NULL,
+    window_start             DATETIME(3) NOT NULL,
+    window_end               DATETIME(3) NOT NULL,
+    sample_count             BIGINT UNSIGNED NOT NULL,
+    failure_count            BIGINT UNSIGNED NOT NULL,
+    error_rate_percentage    DECIMAL(7,4) NOT NULL,
+    p95_latency_ms           BIGINT UNSIGNED NOT NULL,
+    decision                 VARCHAR(32) NOT NULL,
+    action_taken             VARCHAR(32) NOT NULL,
+    rollback_deployment_id   BIGINT UNSIGNED NULL,
+    evidence                 JSON NOT NULL,
+    evaluated_by             VARCHAR(100) NOT NULL,
+    created_at               DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_health_evaluation_deployment (deployment_id, created_at),
+    CONSTRAINT fk_health_evaluation_deployment FOREIGN KEY (deployment_id) REFERENCES tpip_deployment (id),
+    CONSTRAINT fk_health_evaluation_rollback FOREIGN KEY (rollback_deployment_id) REFERENCES tpip_deployment (id),
+    CONSTRAINT chk_health_evaluation_counts CHECK (failure_count <= sample_count),
+    CONSTRAINT chk_health_evaluation_error_rate CHECK (error_rate_percentage BETWEEN 0 AND 100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

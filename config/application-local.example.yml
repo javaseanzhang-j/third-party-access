@@ -1,0 +1,4 @@
+# Copy this file to application-local.yml and keep that file outside version control.
+spring:
+  datasource:
+    password: ${TPIP_MYSQL_PASSWORD}

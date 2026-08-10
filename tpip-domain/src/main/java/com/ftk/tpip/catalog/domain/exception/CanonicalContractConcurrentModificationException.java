@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CanonicalContractConcurrentModificationException extends RuntimeException{public CanonicalContractConcurrentModificationException(long id,long version){super("Canonical contract "+id+" was concurrently modified at rowVersion "+version);}}

@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CatalogConcurrentModificationException extends RuntimeException{public CatalogConcurrentModificationException(String type,long id,long version){super(type+" "+id+" was concurrently modified at rowVersion "+version);}}

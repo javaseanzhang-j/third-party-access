@@ -1,0 +1,3 @@
+package com.ftk.tpip.control.api.integration;
+import com.ftk.tpip.integration.domain.model.*;import java.time.Instant;
+public record IntegrationBindingResponse(long id,String bindingCode,String bindingName,long operationId,long providerContractId,String ownerCode,BindingStatus status,long rowVersion,Instant createdAt,Instant updatedAt){public static IntegrationBindingResponse from(IntegrationBinding b){return new IntegrationBindingResponse(b.id(),b.bindingCode().value(),b.bindingName(),b.operationId(),b.providerContractId(),b.ownerCode(),b.status(),b.rowVersion(),b.createdAt(),b.updatedAt());}}

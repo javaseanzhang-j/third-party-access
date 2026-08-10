@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.integration;import com.ftk.tpip.integration.domain.model.IntegrationPolicy;import java.util.List;public record IntegrationPolicyPage(List<IntegrationPolicy>items,int page,int size,long totalElements){}

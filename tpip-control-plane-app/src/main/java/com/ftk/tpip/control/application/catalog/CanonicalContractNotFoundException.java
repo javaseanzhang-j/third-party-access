@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.catalog;public class CanonicalContractNotFoundException extends RuntimeException{public CanonicalContractNotFoundException(long id){super("Canonical contract not found: "+id);}}

@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.integration;public class IntegrationPolicyVersionNotFoundException extends RuntimeException{public IntegrationPolicyVersionNotFoundException(long p,long v){super("Policy version "+v+" not found under policy "+p);}}

@@ -1,0 +1,41 @@
+CREATE TABLE tpip_deployment_health_alert (
+    id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    deployment_id       BIGINT UNSIGNED NOT NULL,
+    evaluation_id       BIGINT UNSIGNED NOT NULL,
+    alert_code          VARCHAR(80) NOT NULL,
+    severity            VARCHAR(16) NOT NULL,
+    alert_status        VARCHAR(24) NOT NULL,
+    summary             VARCHAR(500) NOT NULL,
+    details             JSON NOT NULL,
+    acknowledged_by     VARCHAR(100) NULL,
+    acknowledged_at     DATETIME(3) NULL,
+    resolved_at         DATETIME(3) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_health_alert_evaluation (evaluation_id),
+    KEY idx_health_alert_deployment_status (deployment_id, alert_status, id),
+    CONSTRAINT fk_health_alert_deployment FOREIGN KEY (deployment_id) REFERENCES tpip_deployment (id),
+    CONSTRAINT fk_health_alert_evaluation FOREIGN KEY (evaluation_id) REFERENCES tpip_deployment_health_evaluation (id),
+    CONSTRAINT chk_health_alert_severity CHECK (severity IN ('WARNING','CRITICAL')),
+    CONSTRAINT chk_health_alert_status CHECK (alert_status IN ('OPEN','ACKNOWLEDGED','RESOLVED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE tpip_notification_outbox (
+    id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    event_type          VARCHAR(100) NOT NULL,
+    aggregate_type      VARCHAR(80) NOT NULL,
+    aggregate_id        VARCHAR(160) NOT NULL,
+    payload             JSON NOT NULL,
+    delivery_status     VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    attempt_count       INT UNSIGNED NOT NULL DEFAULT 0,
+    available_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    claimed_at          DATETIME(3) NULL,
+    delivered_at        DATETIME(3) NULL,
+    last_error          VARCHAR(1000) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_notification_outbox_delivery (delivery_status, available_at, id),
+    CONSTRAINT chk_notification_outbox_status CHECK (delivery_status IN ('PENDING','CLAIMED','DELIVERED','DEAD_LETTER'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

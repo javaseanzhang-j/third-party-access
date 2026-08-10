@@ -1,0 +1,3 @@
+package com.ftk.tpip.control.api.catalog;
+import com.ftk.tpip.catalog.domain.model.*;import java.time.Instant;
+public record CanonicalOperationResponse(long id,long capabilityId,String operationCode,String operationName,String description,InvocationMode invocationMode,IdempotencyClass idempotencyClass,DataClassification dataClassification,String ownerCode,OperationStatus status,long rowVersion,Instant createdAt,Instant updatedAt){public static CanonicalOperationResponse from(CanonicalOperation o){return new CanonicalOperationResponse(o.id(),o.capabilityId(),o.operationCode().value(),o.operationName(),o.description(),o.invocationMode(),o.idempotencyClass(),o.dataClassification(),o.ownerCode(),o.status(),o.rowVersion(),o.createdAt(),o.updatedAt());}}

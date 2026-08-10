@@ -1,0 +1,15 @@
+import { getJson } from '@/api/http'
+import type { JobPriority, JobStatus, ItemStatus, RiskLevel } from '@/features/global-impact/api/globalImpactApi'
+export type WorkspaceLifecycle='DRAFT'|'VERIFIED'|'IN_REVIEW'|'APPROVED'|'COMPILED'
+export interface EffectivePolicy{policyId:number;policyCode:string;policyName:string;versionId:number|null;versionNo:number|null;resolutionSource:'WORKSPACE'|'GLOBAL'|'DEFAULT'}
+export interface LatestBaseline{baselineId:number;fixtureSuiteVersionId:number;sourceVerificationRunId:number;baselineChecksum:string;createdAt:string}
+export interface WorkspaceAsset{workspaceId:number;workspaceCode:string;workspaceName:string;baseBundleId:number|null;environmentCode:string;lifecycleStatus:WorkspaceLifecycle;riskLevel:RiskLevel;ownerCode:string;effectivePolicy:EffectivePolicy|null;latestBaseline:LatestBaseline|null;baselineCount:number;driftSummary:{reportCount:number;actionableCount:number;changedItemCount:number};rowVersion:number;createdAt:string;updatedAt:string}
+export interface Baseline{baselineId:number;fixtureSuiteVersionId:number;sourceVerificationRunId:number;baselineChecksum:string;predecessorBaselineId:number|null;acceptedDriftReportId:number|null;createdAt:string}
+export interface DriftReport{reportId:number;baselineId:number;verificationRunId:number;driftStatus:'NO_DRIFT'|'DRIFTED';comparedCheckCount:number;driftCount:number;reviewStatus:'OPEN'|'ACKNOWLEDGED'|'ACCEPTED'|'DISMISSED'|null;assigneeCode:string|null;successorBaselineId:number|null;createdAt:string;updatedAt:string}
+export interface ImpactEvidence{jobId:string;candidatePolicyId:number;candidatePolicyCode:string;candidatePolicyName:string;candidateVersionId:number;candidateVersionNo:number;jobStatus:JobStatus;priority:JobPriority;itemStatus:ItemStatus;attemptCount:number;workspaceSnapshotId:string|null;impactChecksum:string|null;sealedSnapshotId:string|null;jobCreatedAt:string;finishedAt:string|null}
+export interface WorkspacePage{items:WorkspaceAsset[];page:number;size:number;totalElements:number;totalPages:number}
+export interface WorkspaceDetail{workspace:WorkspaceAsset;baselines:Baseline[];recentDriftReports:DriftReport[];recentImpactEvidence:ImpactEvidence[]}
+export interface Filters{lifecycleStatus?:WorkspaceLifecycle|'';riskLevel?:RiskLevel|'';environmentCode?:string;keyword?:string;page?:number;size?:number}
+const base='/control/v1/verification-drift-workbench/workspace-asset-views'
+function query(f:Filters){const q=new URLSearchParams();if(f.lifecycleStatus)q.set('lifecycleStatus',f.lifecycleStatus);if(f.riskLevel)q.set('riskLevel',f.riskLevel);if(f.environmentCode?.trim())q.set('environmentCode',f.environmentCode.trim());if(f.keyword?.trim())q.set('keyword',f.keyword.trim());q.set('page',String(f.page??0));q.set('size',String(f.size??20));return q.toString()}
+export const workspaceAssetApi={workspaces:(f:Filters={},s?:AbortSignal)=>getJson<WorkspacePage>(`${base}?${query(f)}`,s),workspace:(id:number,s?:AbortSignal)=>getJson<WorkspaceDetail>(`${base}/${id}?limit=20`,s)}

@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.catalog;public class CatalogAssetNotFoundException extends RuntimeException{public CatalogAssetNotFoundException(String type,long id){super(type+" not found: "+id);}}

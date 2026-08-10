@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: tpip-runtime
+  data:
+    redis:
+      host: ${TPIP_REDIS_HOST:127.0.0.1}
+      port: ${TPIP_REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
+      client-type: lettuce
+
+server:
+  port: ${TPIP_RUNTIME_PORT:18081}
+
+tpip:
+  runtime:
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18080}
+    environment-code: ${TPIP_RUNTIME_ENVIRONMENT:test}
+    runtime-version: ${TPIP_RUNTIME_VERSION:0.2.0}
+    instance-id: ${TPIP_RUNTIME_INSTANCE_ID:runtime-local-1}
+    connect-timeout: ${TPIP_BUNDLE_CONNECT_TIMEOUT:1s}
+    read-timeout: ${TPIP_BUNDLE_READ_TIMEOUT:3s}
+    cache-ttl: ${TPIP_BUNDLE_CACHE_TTL:5m}
+    max-stale: ${TPIP_BUNDLE_MAX_STALE:24h}
+    max-artifact-bytes: ${TPIP_BUNDLE_MAX_ARTIFACT_BYTES:10485760}
+    route-ttl: ${TPIP_ROUTE_CACHE_TTL:5s}
+    route-max-stale: ${TPIP_ROUTE_MAX_STALE:5m}
+    max-provider-response-bytes: ${TPIP_MAX_PROVIDER_RESPONSE_BYTES:2097152}
+    audit-enabled: ${TPIP_RUNTIME_AUDIT_ENABLED:true}
+    bundles: []
+
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        tpip.runtime.invocation.duration: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,runtimeReadiness
+          show-details: always
+  health:
+    readinessstate:
+      enabled: true

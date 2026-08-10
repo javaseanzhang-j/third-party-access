@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tpip.local/schema/release-evidence-v1.schema.json",
+  "title": "TPIP Release Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "evidenceType", "releaseId", "status", "signatureStatus",
+    "startedAt", "finishedAt", "sourceIdentity", "versions", "buildEnvironment",
+    "verification", "artifacts", "associations", "failure", "manifestChecksum"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "evidenceType": { "const": "TPIP_RELEASE_EVIDENCE" },
+    "releaseId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["SEALED", "REJECTED", "INCOMPLETE"] },
+    "signatureStatus": { "const": "UNSIGNED" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "sourceIdentity": {
+      "type": "object",
+      "required": ["status", "commit", "dirty", "dirtyEntryCount"],
+      "properties": {
+        "status": { "enum": ["AVAILABLE", "UNAVAILABLE"] },
+        "commit": { "type": ["string", "null"] },
+        "dirty": { "type": ["boolean", "null"] },
+        "dirtyEntryCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "versions": { "type": "object" },
+    "buildEnvironment": { "type": "object" },
+    "verification": { "type": "object" },
+    "artifacts": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "path", "present"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "enum": ["FILE", "DIRECTORY"] },
+          "path": { "type": "string" },
+          "present": { "type": "boolean" },
+          "checksum": { "$ref": "#/$defs/checksum" }
+        }
+      }
+    },
+    "associations": { "type": "object" },
+    "failure": { "type": ["object", "null"] },
+    "manifestChecksum": { "$ref": "#/$defs/checksum" }
+  },
+  "$defs": {
+    "checksum": {
+      "type": "object",
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "const": "SHA-256" },
+        "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

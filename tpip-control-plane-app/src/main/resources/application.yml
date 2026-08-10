@@ -1,0 +1,147 @@
+spring:
+  application:
+    name: tpip-control-plane
+  datasource:
+    url: jdbc:mysql://${TPIP_MYSQL_HOST:127.0.0.1}:${TPIP_MYSQL_PORT:3306}/${TPIP_MYSQL_DATABASE:tpip_platform}?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${TPIP_MYSQL_USERNAME:root}
+    password: ${TPIP_MYSQL_PASSWORD:}
+    hikari:
+      pool-name: tpip-control-plane-pool
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+      validation-timeout: 1000
+  data:
+    redis:
+      host: ${TPIP_REDIS_HOST:127.0.0.1}
+      port: ${TPIP_REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
+      client-type: lettuce
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    clean-disabled: true
+
+server:
+  port: ${TPIP_CONTROL_PORT:18082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+tpip:
+  global-impact-scheduling:
+    dispatch-lease: ${TPIP_GLOBAL_IMPACT_DISPATCH_LEASE:1m}
+    item-lease: ${TPIP_GLOBAL_IMPACT_ITEM_LEASE:5m}
+    stall-threshold: ${TPIP_GLOBAL_IMPACT_STALL_THRESHOLD:10m}
+    critical-stall-threshold: ${TPIP_GLOBAL_IMPACT_CRITICAL_STALL_THRESHOLD:30m}
+    maximum-active-dispatches: ${TPIP_GLOBAL_IMPACT_MAX_ACTIVE_DISPATCHES:8}
+    minimum-batch-size: ${TPIP_GLOBAL_IMPACT_MINIMUM_BATCH_SIZE:2}
+    maximum-batch-size: ${TPIP_GLOBAL_IMPACT_MAXIMUM_BATCH_SIZE:50}
+    stalled-query-limit: ${TPIP_GLOBAL_IMPACT_STALLED_QUERY_LIMIT:100}
+    stall-monitor-enabled: ${TPIP_GLOBAL_IMPACT_STALL_MONITOR_ENABLED:false}
+    stall-monitor-interval: ${TPIP_GLOBAL_IMPACT_STALL_MONITOR_INTERVAL:1m}
+  global-impact-job-maintenance:
+    expiry-enabled: ${TPIP_GLOBAL_IMPACT_EXPIRY_ENABLED:false}
+    purge-enabled: ${TPIP_GLOBAL_IMPACT_PURGE_ENABLED:false}
+    delete-orphan-snapshots: ${TPIP_GLOBAL_IMPACT_DELETE_ORPHAN_SNAPSHOTS:false}
+    poll-interval: ${TPIP_GLOBAL_IMPACT_MAINTENANCE_INTERVAL:1h}
+    retention: ${TPIP_GLOBAL_IMPACT_JOB_RETENTION:7d}
+    batch-size: ${TPIP_GLOBAL_IMPACT_MAINTENANCE_BATCH_SIZE:50}
+  workspace-verification:
+    recovery-enabled: ${TPIP_WORKSPACE_VERIFICATION_RECOVERY_ENABLED:true}
+    timeout: ${TPIP_WORKSPACE_VERIFICATION_TIMEOUT:10m}
+    recovery-poll-interval: ${TPIP_WORKSPACE_VERIFICATION_RECOVERY_POLL_INTERVAL:1m}
+    recovery-batch-size: ${TPIP_WORKSPACE_VERIFICATION_RECOVERY_BATCH_SIZE:100}
+    remote-call:
+      enabled: ${TPIP_WORKSPACE_REMOTE_CALL_ENABLED:false}
+      allowed-environments: ${TPIP_WORKSPACE_REMOTE_CALL_ALLOWED_ENVIRONMENTS:test,local,dev}
+      allowed-hosts: ${TPIP_WORKSPACE_REMOTE_CALL_ALLOWED_HOSTS:}
+      allowed-ports: ${TPIP_WORKSPACE_REMOTE_CALL_ALLOWED_PORTS:}
+      maximum-calls-per-run: ${TPIP_WORKSPACE_REMOTE_CALL_MAXIMUM_CALLS:20}
+      maximum-request-bytes: ${TPIP_WORKSPACE_REMOTE_CALL_MAXIMUM_REQUEST_BYTES:262144}
+      maximum-response-bytes: ${TPIP_WORKSPACE_REMOTE_CALL_MAXIMUM_RESPONSE_BYTES:1048576}
+      maximum-total-timeout: ${TPIP_WORKSPACE_REMOTE_CALL_MAXIMUM_TIMEOUT:5s}
+  regression-scheduler:
+    enabled: ${TPIP_REGRESSION_SCHEDULER_ENABLED:false}
+    poll-interval: ${TPIP_REGRESSION_SCHEDULER_POLL_INTERVAL:1m}
+    batch-size: ${TPIP_REGRESSION_SCHEDULER_BATCH_SIZE:10}
+    lease: ${TPIP_REGRESSION_SCHEDULER_LEASE:10m}
+  drift-governance-reminder-preview:
+    enabled: ${TPIP_DRIFT_REMINDER_PREVIEW_ENABLED:false}
+    poll-interval: ${TPIP_DRIFT_REMINDER_PREVIEW_POLL_INTERVAL:5m}
+    maximum-executions-per-cycle: ${TPIP_DRIFT_REMINDER_PREVIEW_MAXIMUM_EXECUTIONS:500}
+    maximum-batches-per-cycle: ${TPIP_DRIFT_REMINDER_PREVIEW_MAXIMUM_BATCHES:10}
+    environment-code: ${TPIP_DRIFT_REMINDER_PREVIEW_ENVIRONMENT:local}
+    actor: ${TPIP_DRIFT_REMINDER_PREVIEW_ACTOR:drift-reminder-preview}
+  notification-delivery:
+    allow-http-channel-endpoints: ${TPIP_NOTIFICATION_ALLOW_HTTP_CHANNEL_ENDPOINTS:false}
+    claim-lease: ${TPIP_NOTIFICATION_CLAIM_LEASE:30s}
+    retry-base-delay: ${TPIP_NOTIFICATION_RETRY_BASE_DELAY:5s}
+    retry-maximum-delay: ${TPIP_NOTIFICATION_RETRY_MAXIMUM_DELAY:5m}
+    maximum-retry-after: ${TPIP_NOTIFICATION_MAXIMUM_RETRY_AFTER:1h}
+    maximum-attempts: ${TPIP_NOTIFICATION_MAXIMUM_ATTEMPTS:5}
+    maximum-batch-size: ${TPIP_NOTIFICATION_MAXIMUM_BATCH_SIZE:100}
+    minimum-operational-attempts: ${TPIP_NOTIFICATION_MINIMUM_OPERATIONAL_ATTEMPTS:20}
+    warning-minimum-success-rate: ${TPIP_NOTIFICATION_WARNING_MINIMUM_SUCCESS_RATE:99.00}
+    critical-minimum-success-rate: ${TPIP_NOTIFICATION_CRITICAL_MINIMUM_SUCCESS_RATE:95.00}
+    operations-automation-enabled: ${TPIP_NOTIFICATION_OPERATIONS_AUTOMATION_ENABLED:false}
+    operations-automation-poll-interval: ${TPIP_NOTIFICATION_OPERATIONS_POLL_INTERVAL:1m}
+    operations-evaluation-window: ${TPIP_NOTIFICATION_OPERATIONS_EVALUATION_WINDOW:5m}
+    operations-evaluation-delay: ${TPIP_NOTIFICATION_OPERATIONS_EVALUATION_DELAY:30s}
+    operations-environments: ${TPIP_NOTIFICATION_OPERATIONS_ENVIRONMENTS:default}
+    attempt-online-retention: ${TPIP_NOTIFICATION_ATTEMPT_ONLINE_RETENTION:90d}
+  notification-attempt-archive:
+    storage-provider: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_STORAGE_PROVIDER:FILESYSTEM}
+    directory: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_DIRECTORY:./var/archive/notification-attempts}
+    maximum-records-per-batch: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_MAXIMUM_RECORDS:100000}
+    maximum-artifact-bytes: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_MAXIMUM_BYTES:104857600}
+    purge-enabled: ${TPIP_NOTIFICATION_ATTEMPT_PURGE_ENABLED:false}
+    automation-enabled: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_AUTOMATION_ENABLED:false}
+    automation-poll-interval: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_POLL_INTERVAL:1h}
+    automation-environments: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_ENVIRONMENTS:default}
+    automation-window: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_WINDOW:1d}
+    automation-completion-delay: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_COMPLETION_DELAY:1d}
+    automation-lookback: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_LOOKBACK:365d}
+    automation-maximum-batches-per-cycle: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_MAXIMUM_BATCHES_PER_CYCLE:3}
+    automation-lease: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_AUTOMATION_LEASE:30m}
+    verification-drill-enabled: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_VERIFICATION_DRILL_ENABLED:true}
+    verification-drill-interval: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_VERIFICATION_DRILL_INTERVAL:30d}
+    verification-maximum-batches-per-cycle: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_VERIFICATION_MAXIMUM_BATCHES_PER_CYCLE:10}
+    s3:
+      bucket: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_BUCKET:}
+      prefix: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_PREFIX:notification-attempts/}
+      region: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_REGION:us-east-1}
+      endpoint: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_ENDPOINT:}
+      path-style-access: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_PATH_STYLE_ACCESS:false}
+      access-key: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_ACCESS_KEY:}
+      secret-key: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_SECRET_KEY:}
+      session-token: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_SESSION_TOKEN:}
+      require-versioning: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_REQUIRE_VERSIONING:true}
+      require-object-lock: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_REQUIRE_OBJECT_LOCK:true}
+      retention: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_RETENTION:3650d}
+      object-lock-mode: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_OBJECT_LOCK_MODE:COMPLIANCE}
+      connection-timeout: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_CONNECTION_TIMEOUT:3s}
+      socket-timeout: ${TPIP_NOTIFICATION_ATTEMPT_ARCHIVE_S3_SOCKET_TIMEOUT:30s}
+  deployment:
+    runtime-targets: ${TPIP_RUNTIME_TARGETS:http://127.0.0.1:18081}
+    minimum-successful-instances: ${TPIP_PREHEAT_MINIMUM_INSTANCES:1}
+    connect-timeout: ${TPIP_PREHEAT_CONNECT_TIMEOUT:1s}
+    read-timeout: ${TPIP_PREHEAT_READ_TIMEOUT:10s}
+    health-minimum-samples: ${TPIP_HEALTH_MINIMUM_SAMPLES:100}
+    health-maximum-error-rate: ${TPIP_HEALTH_MAXIMUM_ERROR_RATE:5.00}
+    health-maximum-p95-latency-ms: ${TPIP_HEALTH_MAXIMUM_P95_LATENCY_MS:2000}
+    health-auto-rollback-enabled: ${TPIP_HEALTH_AUTO_ROLLBACK_ENABLED:true}
+    health-automation-token: ${TPIP_HEALTH_AUTOMATION_TOKEN:}
+    health-consecutive-unhealthy-windows: ${TPIP_HEALTH_CONSECUTIVE_UNHEALTHY_WINDOWS:2}
+    health-critical-error-rate: ${TPIP_HEALTH_CRITICAL_ERROR_RATE:20.00}
+    health-critical-p95-latency-ms: ${TPIP_HEALTH_CRITICAL_P95_LATENCY_MS:5000}

@@ -1,0 +1,33 @@
+{
+  "name": "tpip-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 18100",
+    "build": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:governance": "playwright test e2e/reminder-batch-audit-gate.spec.ts --workers=1"
+  },
+  "dependencies": {
+    "@tanstack/vue-query": "5.101.4",
+    "element-plus": "2.14.4",
+    "pinia": "4.0.2",
+    "vue": "3.5.41",
+    "vue-router": "5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@playwright/test": "1.62.1",
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/test-utils": "2.4.11",
+    "jsdom": "30.0.1",
+    "typescript": "5.9.3",
+    "unplugin-vue-components": "32.1.0",
+    "vite": "8.2.1",
+    "vitest": "4.1.10",
+    "vue-tsc": "3.3.9"
+  }
+}

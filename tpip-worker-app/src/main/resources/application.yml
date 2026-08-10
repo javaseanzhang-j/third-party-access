@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: tpip-worker
+  data:
+    redis:
+      host: ${TPIP_REDIS_HOST:127.0.0.1}
+      port: ${TPIP_REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
+      client-type: lettuce
+
+server:
+  port: ${TPIP_WORKER_PORT:8082}
+
+management:
+  health:
+    redis:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+tpip:
+  global-impact-worker:
+    enabled: ${TPIP_GLOBAL_IMPACT_WORKER_ENABLED:false}
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18080}
+    automation-token: ${TPIP_HEALTH_AUTOMATION_TOKEN:}
+    worker-id: ${TPIP_GLOBAL_IMPACT_WORKER_ID:global-impact-worker-local-1}
+    poll-interval: ${TPIP_GLOBAL_IMPACT_POLL_INTERVAL:5s}
+    request-timeout: ${TPIP_GLOBAL_IMPACT_REQUEST_TIMEOUT:30s}
+    expiry-warning: ${TPIP_GLOBAL_IMPACT_EXPIRY_WARNING:5m}
+    batch-size: ${TPIP_GLOBAL_IMPACT_BATCH_SIZE:20}
+    discovery-limit: ${TPIP_GLOBAL_IMPACT_DISCOVERY_LIMIT:10}
+    max-concurrent-jobs: ${TPIP_GLOBAL_IMPACT_MAX_CONCURRENT_JOBS:2}
+    max-batches-per-minute: ${TPIP_GLOBAL_IMPACT_MAX_BATCHES_PER_MINUTE:30}
+  notification-dispatcher:
+    enabled: ${TPIP_NOTIFICATION_DISPATCHER_ENABLED:false}
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18080}
+    automation-token: ${TPIP_HEALTH_AUTOMATION_TOKEN:}
+    worker-id: ${TPIP_NOTIFICATION_WORKER_ID:notification-worker-local-1}
+    poll-interval: ${TPIP_NOTIFICATION_POLL_INTERVAL:2s}
+    request-timeout: ${TPIP_NOTIFICATION_REQUEST_TIMEOUT:5s}
+    batch-size: ${TPIP_NOTIFICATION_BATCH_SIZE:20}
+    allow-http-webhooks: ${TPIP_NOTIFICATION_ALLOW_HTTP_WEBHOOKS:false}
+    circuit-failure-threshold: ${TPIP_NOTIFICATION_CIRCUIT_FAILURE_THRESHOLD:5}
+    circuit-failure-window: ${TPIP_NOTIFICATION_CIRCUIT_FAILURE_WINDOW:1m}
+    circuit-open-duration: ${TPIP_NOTIFICATION_CIRCUIT_OPEN_DURATION:30s}
+    circuit-half-open-probe-lease: ${TPIP_NOTIFICATION_CIRCUIT_HALF_OPEN_PROBE_LEASE:10s}
+  health-worker:
+    enabled: ${TPIP_HEALTH_WORKER_ENABLED:false}
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18080}
+    prometheus-base-uri: ${TPIP_PROMETHEUS_BASE_URI:http://127.0.0.1:9090}
+    automation-token: ${TPIP_HEALTH_AUTOMATION_TOKEN:}
+    worker-id: ${TPIP_HEALTH_WORKER_ID:health-worker-local-1}
+    poll-interval: ${TPIP_HEALTH_POLL_INTERVAL:30s}
+    evaluation-window: ${TPIP_HEALTH_EVALUATION_WINDOW:5m}
+    cooldown: ${TPIP_HEALTH_COOLDOWN:1m}
+    lock-ttl: ${TPIP_HEALTH_LOCK_TTL:10m}
+    connect-timeout: ${TPIP_HEALTH_CONNECT_TIMEOUT:1s}
+    read-timeout: ${TPIP_HEALTH_READ_TIMEOUT:5s}

@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CanonicalContractVersionAlreadyExistsException extends RuntimeException{public CanonicalContractVersionAlreadyExistsException(long id,String version){super("Canonical contract "+id+" already has semantic version "+version);}}

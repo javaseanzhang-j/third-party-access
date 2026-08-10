@@ -1,0 +1,1 @@
+package com.ftk.tpip.control.application.integration;public class PolicyTypeNotFoundException extends RuntimeException{public PolicyTypeNotFoundException(long id){super("Policy type not found: "+id);}}

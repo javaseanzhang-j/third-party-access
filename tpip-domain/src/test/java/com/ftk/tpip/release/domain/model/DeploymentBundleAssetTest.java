@@ -1,0 +1,3 @@
+package com.ftk.tpip.release.domain.model;
+import static org.junit.jupiter.api.Assertions.*;import org.junit.jupiter.api.Test;
+class DeploymentBundleAssetTest{@Test void createsReadyImmutableBundle(){var b=new DeploymentBundleAsset(null,"refund.provider-a.prod","1.0.0",1,2,3,"prod","{}","db://bundle/refund/1.0.0","a".repeat(64),"compiler/1",">=0.1 <1.0","{}",BundleLifecycleStatus.READY,null,null,null);assertEquals(BundleLifecycleStatus.READY,b.lifecycleStatus());}@Test void publishedBundleRequiresEvidence(){assertThrows(IllegalArgumentException.class,()->new DeploymentBundleAsset(null,"refund.provider-a.prod","1.0.0",1,2,3,"prod","{}","db://bundle/refund/1.0.0","a".repeat(64),"compiler/1","*","{}",BundleLifecycleStatus.PUBLISHED,null,null,null));}}

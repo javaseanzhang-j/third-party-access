@@ -1,0 +1,1 @@
+package com.ftk.tpip.catalog.domain.exception;public class CanonicalContractCodeAlreadyExistsException extends RuntimeException{public CanonicalContractCodeAlreadyExistsException(String code){super("Canonical contract already exists: "+code);}}
