@@ -93,12 +93,11 @@ TPIP 平台提供的统一接入服务可能被多个渠道系统、多个业务
 第一阶段建议采用 `appKey + HMAC-SHA256`。调用示例：
 
 ```http
-POST /runtime/v1/invoke
+POST /integration/v1/operations/sms.send:invoke
 X-TPIP-App-Key: member-center-prod
 X-TPIP-Timestamp: 1786348800000
 X-TPIP-Nonce: 64d73f781aa74cfa
 X-TPIP-Signature: 69200d...
-X-TPIP-Service-Code: sms.send
 X-TPIP-Scenario: login-verification
 X-Request-Id: request-001
 Content-Type: application/json
