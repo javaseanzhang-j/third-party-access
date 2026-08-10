@@ -3,6 +3,9 @@ package com.ftk.tpip.control.configuration;
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcCredentialRefRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAccessChannelRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcProviderProductRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcCredentialProfileRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAuthenticationTemplateRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcChannelAuthenticationRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCanonicalOperationRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCatalogHierarchyRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCanonicalContractRepository;
@@ -46,9 +49,13 @@ import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcProviderRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcProviderContractRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcProviderEndpointRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcEndpointProbeRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcInterfaceTransportRepository;
 import com.ftk.tpip.provider.domain.repository.CredentialRefRepository;
 import com.ftk.tpip.access.domain.repository.AccessChannelRepository;
 import com.ftk.tpip.access.domain.repository.ProviderProductRepository;
+import com.ftk.tpip.access.domain.repository.CredentialProfileRepository;
+import com.ftk.tpip.access.domain.repository.AuthenticationTemplateRepository;
+import com.ftk.tpip.access.domain.repository.ChannelAuthenticationRepository;
 import com.ftk.tpip.catalog.domain.repository.CanonicalOperationRepository;
 import com.ftk.tpip.catalog.domain.repository.CatalogHierarchyRepository;
 import com.ftk.tpip.catalog.domain.repository.CanonicalContractRepository;
@@ -99,6 +106,7 @@ import com.ftk.tpip.bundle.DefaultBundleCompiler;
 import com.ftk.tpip.provider.domain.repository.ProviderContractRepository;
 import com.ftk.tpip.provider.domain.repository.ProviderEndpointRepository;
 import com.ftk.tpip.provider.domain.repository.EndpointProbeRepository;
+import com.ftk.tpip.provider.domain.repository.InterfaceTransportRepository;
 import com.ftk.tpip.provider.domain.repository.ProviderRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -122,6 +130,26 @@ public class PersistenceConfiguration {
     @Bean
     ProviderProductRepository providerProductRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcProviderProductRepository(jdbcTemplate);
+    }
+
+    @Bean
+    CredentialProfileRepository credentialProfileRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcCredentialProfileRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AuthenticationTemplateRepository authenticationTemplateRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcAuthenticationTemplateRepository(jdbcTemplate);
+    }
+
+    @Bean
+    ChannelAuthenticationRepository channelAuthenticationRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcChannelAuthenticationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    InterfaceTransportRepository interfaceTransportRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcInterfaceTransportRepository(jdbcTemplate);
     }
 
     @Bean
