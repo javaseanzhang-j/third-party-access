@@ -192,3 +192,23 @@ Secret 类型请求参数只能通过普通页面发送到 Header 或 Cookie。�
 样例预览默认读取业务标准契约的请求样例和第三方报文版本的返回样例；没有显式样例时，根据 Schema 的 `example`、`default` 和字段类型生成基础样例。预览同时执行请求与返回方向，检查路径存在性、必填字段和 STRING/NUMBER/BOOLEAN/OBJECT/ARRAY 类型转换。最终提交仍由服务端 Mapping Compiler 重新编译和校验，前端预览不能绕过服务端约束。
 
 页面通过 `POST /control/v1/product-model/services/{serviceId}/targets:provision-business` 一次提交。Control Plane 在同一事务内生成 Endpoint 快照、双向 MappingVersion、BindingVersion 并发布；任一步失败均整体回滚。旧 `/targets:provision` 仅保留兼容使用。
+
+## 13. 业务标准报文表单化
+
+新增接入服务时，业务用户不再默认手写 Canonical JSON Schema。页面在服务基本信息下提供“业务标准请求”和“业务标准返回”两个字段表单，配置项与第三方报文保持一致：中文含义、业务 JSONPath、字段类型、示例值、必填和说明。
+
+平台把字段表单转换为 JSON Schema 2020-12 兼容对象和样例文档，再通过原有接入服务聚合命令创建并发布 REQUEST、RESPONSE 两个 Canonical Contract Version。嵌套必填字段会同时约束父对象，例如 `$.customer.id` 必填时，Schema 同时要求 `customer` 和 `id` 存在。
+
+没有请求体或返回字段的服务可以保持空字段列表，平台生成禁止额外字段的空对象 Schema。需要数组元素结构、组合类型或更完整 JSON Schema 关键字时，可以切换“高级 JSON Schema”模式，直接维护结构与样例。
+
+至此，普通接入流程形成完整闭环：
+
+```text
+业务标准字段表单
+  → 第三方系统 / 产品 / 通道 / 账号认证
+  → 第三方接口调用信息与报文字段表单
+  → 业务字段与第三方字段双向映射
+  → 自动生成并发布可执行实现
+```
+
+Domain、Capability、Canonical Contract、Provider Contract、Endpoint、Mapping、BindingVersion 等资产仍按原模型创建和治理，但不再要求普通配置人员理解或手工拼装。

@@ -42,6 +42,10 @@ export function buildBusinessMessageSchema(fields: BusinessMessageField[]): Reco
         const existing = parent.properties[segment]
         if (existing && existing.type !== 'object') throw new Error(`字段路径 ${path} 与已有非对象字段冲突`)
         parent.properties[segment] ??= { type: 'object', properties: {}, additionalProperties: false }
+        if (field.required) {
+          parent.required ??= []
+          if (!parent.required.includes(segment)) parent.required.push(segment)
+        }
         parent = parent.properties[segment]!
         continue
       }

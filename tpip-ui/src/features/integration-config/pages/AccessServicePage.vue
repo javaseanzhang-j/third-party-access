@@ -10,8 +10,11 @@ import { providerContractVersionApi, type ProviderContractVersionAsset } from '.
 import { businessIntegrationApi, type InterfaceTransportVersion } from '../api/businessIntegrationApi'
 import { canonicalAssetApi, type CanonicalContractVersionAsset } from '../api/canonicalAssetApi'
 import BusinessFieldMappingEditor from '../components/BusinessFieldMappingEditor.vue'
+import BusinessContractFieldEditor from '../components/BusinessContractFieldEditor.vue'
 import { autoMatchFields, exampleFromSchema, executeMappingPreview, extractSchemaFields,
   type BusinessMappingRow } from '../model/businessFieldMapping'
+import { buildBusinessMessageExample, buildBusinessMessageSchema,
+  type BusinessMessageField } from '../model/businessMessageSchema'
 
 const queryClient = useQueryClient()
 const servicesQuery = useQuery({ queryKey: ['product-services'], queryFn: ({ signal }) => accessServiceApi.list(signal) })
@@ -31,6 +34,8 @@ const dryRunForm = reactive({ requestId: '', routingKey: '', attributesText: '{}
 const dryRunResult = ref<DryRunResult | null>(null)
 const errorMessage = ref('')
 const defaultSchema = JSON.stringify({ type: 'object', additionalProperties: false, properties: {} }, null, 2)
+const standardContractMode = ref<'FORM' | 'JSON'>('FORM')
+const standardRequestFields = ref<BusinessMessageField[]>([]); const standardResponseFields = ref<BusinessMessageField[]>([])
 const form = reactive({ serviceCode: '', serviceName: '', description: '', invocationMode: 'SYNC' as 'SYNC' | 'ASYNC' | 'CALLBACK',
   idempotencyClass: 'UNKNOWN' as 'UNKNOWN' | 'IDEMPOTENT' | 'IDEMPOTENT_WITH_KEY' | 'NON_IDEMPOTENT',
   dataClassification: 'INTERNAL' as 'INTERNAL' | 'PUBLIC' | 'CONFIDENTIAL' | 'RESTRICTED', ownerCode: 'local',
@@ -70,7 +75,15 @@ function parseJson(text: string, label: string, optional = false): unknown {
 function providerName(providerId: number): string {
   return providersQuery.data.value?.items.find(item => item.id === providerId)?.providerName ?? `第三方 #${providerId}`
 }
-function openCreate(): void { errorMessage.value = ''; createDialog.value = true }
+function emptyStandardField(): BusinessMessageField {
+  return { path: '$.', name: '', type: 'STRING', required: false, description: '', example: '' }
+}
+function openCreate(): void {
+  errorMessage.value = ''; standardContractMode.value = 'FORM'
+  if (!standardRequestFields.value.length) standardRequestFields.value = [emptyStandardField()]
+  if (!standardResponseFields.value.length) standardResponseFields.value = [emptyStandardField()]
+  createDialog.value = true
+}
 function openDetail(service: unknown): void { detailService.value = service as ProductAccessService }
 async function openTarget(): Promise<void> {
   errorMessage.value = ''; targetForm.providerId = undefined; targetForm.providerProductId = undefined
@@ -146,11 +159,20 @@ function submitCreate(): void {
   errorMessage.value = ''
   if (!form.serviceCode.trim() || !form.serviceName.trim() || !form.ownerCode.trim()) { errorMessage.value = '请填写服务编码、名称和负责人'; return }
   try {
+    const requestFields = standardRequestFields.value.filter(item => item.path.trim() && item.path.trim() !== '$.')
+    const responseFields = standardResponseFields.value.filter(item => item.path.trim() && item.path.trim() !== '$.')
+    const emptyObject = { type: 'object', additionalProperties: false, properties: {} }
+    const requestSchema = standardContractMode.value === 'FORM'
+      ? buildBusinessMessageSchema(requestFields) ?? emptyObject : parseJson(form.requestSchemaText, '标准请求结构') as Record<string, unknown>
+    const responseSchema = standardContractMode.value === 'FORM'
+      ? buildBusinessMessageSchema(responseFields) ?? emptyObject : parseJson(form.responseSchemaText, '标准返回结构') as Record<string, unknown>
+    const requestExample = standardContractMode.value === 'FORM'
+      ? buildBusinessMessageExample(requestFields) ?? {} : parseJson(form.requestExampleText, '请求样例', true)
+    const responseExample = standardContractMode.value === 'FORM'
+      ? buildBusinessMessageExample(responseFields) ?? {} : parseJson(form.responseExampleText, '返回样例', true)
     createService.mutate({ serviceCode: form.serviceCode.trim(), serviceName: form.serviceName.trim(), description: form.description.trim() || null,
       invocationMode: form.invocationMode, idempotencyClass: form.idempotencyClass, dataClassification: form.dataClassification,
-      ownerCode: form.ownerCode.trim(), requestSchema: parseJson(form.requestSchemaText, '标准请求结构') as Record<string, unknown>,
-      requestExample: parseJson(form.requestExampleText, '请求样例', true), responseSchema: parseJson(form.responseSchemaText, '标准返回结构') as Record<string, unknown>,
-      responseExample: parseJson(form.responseExampleText, '返回样例', true) })
+      ownerCode: form.ownerCode.trim(), requestSchema, requestExample, responseSchema, responseExample })
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'JSON 格式错误' }
 }
 const addTarget = useMutation({
@@ -223,7 +245,9 @@ const runDryRoute = useMutation({ mutationFn: () => {
     <el-dialog v-model="createDialog" title="新增接入服务" width="940px" :close-on-click-modal="false">
       <el-alert type="success" :closable="false" show-icon title="这里定义的是业务系统看到的稳定接口，不需要选择第三方厂商。" />
       <el-form class="dialog-form" label-position="top"><div class="form-two-columns"><el-form-item label="业务调用编码（serviceCode）" required><el-input v-model="form.serviceCode" placeholder="例如：sms.send" /><small class="form-hint">业务系统调用平台时传递的固定编码。</small></el-form-item><el-form-item label="服务名称" required><el-input v-model="form.serviceName" placeholder="例如：发送短信" /></el-form-item><el-form-item label="调用方式"><el-select v-model="form.invocationMode" style="width:100%"><el-option label="同步等待结果" value="SYNC" /><el-option label="异步受理" value="ASYNC" /><el-option label="回调返回" value="CALLBACK" /></el-select></el-form-item><el-form-item label="重复请求处理"><el-select v-model="form.idempotencyClass" style="width:100%"><el-option label="暂未确定" value="UNKNOWN" /><el-option label="重复调用结果相同" value="IDEMPOTENT" /><el-option label="调用方传幂等键" value="IDEMPOTENT_WITH_KEY" /><el-option label="不可重复调用" value="NON_IDEMPOTENT" /></el-select></el-form-item><el-form-item label="数据敏感级别"><el-select v-model="form.dataClassification" style="width:100%"><el-option label="内部数据" value="INTERNAL" /><el-option label="公开数据" value="PUBLIC" /><el-option label="敏感数据" value="CONFIDENTIAL" /><el-option label="严格受限数据" value="RESTRICTED" /></el-select></el-form-item><el-form-item label="负责人" required><el-input v-model="form.ownerCode" /></el-form-item></div><el-form-item label="用途说明"><el-input v-model="form.description" type="textarea" :rows="2" /></el-form-item>
-      <div class="schema-two-columns"><el-form-item label="业务标准请求结构（JSON Schema）" required><el-input v-model="form.requestSchemaText" type="textarea" :rows="10" class="schema-editor" /></el-form-item><el-form-item label="业务标准返回结构（JSON Schema）" required><el-input v-model="form.responseSchemaText" type="textarea" :rows="10" class="schema-editor" /></el-form-item><el-form-item label="请求样例 JSON"><el-input v-model="form.requestExampleText" type="textarea" :rows="5" class="schema-editor" /></el-form-item><el-form-item label="返回样例 JSON"><el-input v-model="form.responseExampleText" type="textarea" :rows="5" class="schema-editor" /></el-form-item></div><p v-if="errorMessage" class="command-validation">{{ errorMessage }}</p></el-form>
+      <div class="standard-contract-heading"><div><strong>业务标准报文</strong><small>这是所有第三方实现共同遵守的稳定业务字段，第三方差异由后续字段映射吸收。</small></div><el-radio-group v-model="standardContractMode"><el-radio-button value="FORM">业务字段表单</el-radio-button><el-radio-button value="JSON">高级 JSON Schema</el-radio-button></el-radio-group></div>
+      <template v-if="standardContractMode === 'FORM'"><BusinessContractFieldEditor v-model="standardRequestFields" title="业务标准请求" description="业务系统调用 serviceCode 时提交的字段" path-example="例如 $.mobile" /><BusinessContractFieldEditor v-model="standardResponseFields" title="业务标准返回" description="TPIP 向业务系统返回的稳定字段" path-example="例如 $.accepted" /></template>
+      <div v-else class="schema-two-columns"><el-form-item label="业务标准请求结构（JSON Schema）" required><el-input v-model="form.requestSchemaText" type="textarea" :rows="10" class="schema-editor" /></el-form-item><el-form-item label="业务标准返回结构（JSON Schema）" required><el-input v-model="form.responseSchemaText" type="textarea" :rows="10" class="schema-editor" /></el-form-item><el-form-item label="请求样例 JSON"><el-input v-model="form.requestExampleText" type="textarea" :rows="5" class="schema-editor" /></el-form-item><el-form-item label="返回样例 JSON"><el-input v-model="form.responseExampleText" type="textarea" :rows="5" class="schema-editor" /></el-form-item></div><p v-if="errorMessage" class="command-validation">{{ errorMessage }}</p></el-form>
       <template #footer><el-button @click="createDialog = false">取消</el-button><el-button type="primary" :loading="createService.isPending.value" @click="submitCreate">创建服务和标准报文</el-button></template>
     </el-dialog>
 

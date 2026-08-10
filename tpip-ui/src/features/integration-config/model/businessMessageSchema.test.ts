@@ -26,4 +26,11 @@ describe('businessMessageSchema', () => {
     expect(() => buildBusinessMessageSchema([{ path: '$.success', name: '成功', type: 'BOOLEAN', required: true,
       description: '', example: 'yes' }])).toThrow('true 或 false')
   })
+
+  it('requires parent objects for a required nested field', () => {
+    expect(buildBusinessMessageSchema([{ path: '$.data.id', name: '编号', type: 'STRING', required: true,
+      description: '', example: '1' }])).toMatchObject({ required: ['data'], properties: {
+      data: { required: ['id'] }
+    } })
+  })
 })
