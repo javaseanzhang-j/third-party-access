@@ -17,6 +17,8 @@ import com.ftk.tpip.routing.domain.repository.ServiceRouteRepository;
 import com.ftk.tpip.access.domain.model.*;
 import com.ftk.tpip.access.domain.repository.AccessChannelRepository;
 import com.ftk.tpip.access.domain.repository.ChannelAuthenticationRepository;
+import com.ftk.tpip.access.domain.repository.CredentialProfileRepository;
+import com.ftk.tpip.control.application.access.CredentialBindingResolver;
 import com.ftk.tpip.access.domain.service.AccessParameterResolver;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,8 @@ public class BindingVersionBundlePreviewApplicationService {
     private final ServiceRouteRepository routes;
     private final AccessChannelRepository channels;
     private final ChannelAuthenticationRepository channelAuthentications;
+    private final CredentialProfileRepository credentialProfiles;
+    private final CredentialBindingResolver credentialBindings;
     private final AccessParameterResolver accessResolver=new AccessParameterResolver();
     private final PolicyPlanComposer policyComposer=new PolicyPlanComposer();
 
@@ -45,11 +49,13 @@ public class BindingVersionBundlePreviewApplicationService {
             IntegrationMappingRepository mappings,IntegrationPolicyRepository policies,
             IntegrationPolicyApplicationService policyService,MappingContentCanonicalizer mappingCompiler,
             BundleCompiler bundleCompiler,ObjectMapper json,ServiceRouteRepository routes,AccessChannelRepository channels,
-            ChannelAuthenticationRepository channelAuthentications){this.bindings=bindings;this.versions=versions;this.operations=operations;
+            ChannelAuthenticationRepository channelAuthentications,CredentialProfileRepository credentialProfiles,
+            CredentialBindingResolver credentialBindings){this.bindings=bindings;this.versions=versions;this.operations=operations;
         this.canonicalContracts=canonicalContracts;this.providerContracts=providerContracts;this.endpoints=endpoints;
         this.credentials=credentials;this.mappings=mappings;this.policies=policies;this.policyService=policyService;
         this.mappingCompiler=mappingCompiler;this.bundleCompiler=bundleCompiler;this.json=json;this.routes=routes;this.channels=channels;
-        this.channelAuthentications=channelAuthentications;}
+        this.channelAuthentications=channelAuthentications;this.credentialProfiles=credentialProfiles;
+        this.credentialBindings=credentialBindings;}
 
     @Transactional(readOnly=true)
     public DeploymentBundleManifest preview(long bindingId,long versionId,String bundleCode,String bundleVersion){
@@ -118,7 +124,8 @@ public class BindingVersionBundlePreviewApplicationService {
         if(policyPlan!=null)collectSecrets(json.valueToTree(policyPlan),secrets);
         String credentialReference=null;
         if(endpoint.credentialRefId()!=null){CredentialRef credential=credentials.findById(endpoint.credentialRefId()).orElseThrow();credentialReference=credential.secretUri();secrets.add(credentialReference);}
-        ObjectNode endpointNode=endpointSnapshot(endpoint,credentialReference,frozen.accessChannelId(),binding.providerContractId(),secrets);
+        ObjectNode endpointNode=endpointSnapshot(endpoint,credentialReference,frozen.accessChannelId(),binding.providerContractId(),
+                channelAuthenticationVersion,secrets);
         freezePolicyLineage(endpointNode,channelAuthenticationVersion,scopedPolicyVersions,implementationVersion,policyPlan);
         return bundleCompiler.compile(new BundleCompilationRequest(bundleCode,bundleVersion,
                 operation.operationCode().value(),endpoint.environmentCode(),binding.bindingCode().value()+"@"+frozen.versionNo(),
@@ -133,14 +140,30 @@ public class BindingVersionBundlePreviewApplicationService {
     private PolicyPlanLayer layer(String code,AccessPolicyVersion version){CompiledPolicyPlan plan=version.normalizedDocument()==null?null:policyService.compileScoped(version.policyCode().value(),version.versionNo(),read(version.normalizedDocument()));return new PolicyPlanLayer(code,plan,version.disabledStepIds());}
     private void freezePolicyLineage(ObjectNode endpoint,ChannelAuthenticationVersion authentication,List<AccessPolicyVersion> scoped,IntegrationPolicyVersion implementation,CompiledPolicyPlan effective){if(authentication==null&&scoped.isEmpty()&&implementation==null)return;ObjectNode evidence=endpoint.putObject("policyComposition");evidence.put("strategy","AUTHENTICATION_CHANNEL_INTERFACE_IMPLEMENTATION");if(effective!=null)evidence.put("effectiveChecksum",effective.checksum());ArrayNode layers=evidence.putArray("layers");if(authentication!=null){ObjectNode layer=layers.addObject();layer.put("scope","CHANNEL_AUTHENTICATION");layer.put("versionId",authentication.id());layer.put("versionNo",authentication.versionNo());layer.put("contentChecksum",authentication.contentChecksum());}for(AccessPolicyVersion version:scoped){ObjectNode layer=layers.addObject();layer.put("scope",version.scope().name());layer.put("versionId",version.id());layer.put("versionNo",version.versionNo());layer.put("contentChecksum",version.contentChecksum());if(version.providerContractId()!=null)layer.put("providerContractId",version.providerContractId());}if(implementation!=null){ObjectNode layer=layers.addObject();layer.put("scope","IMPLEMENTATION");layer.put("versionId",implementation.id());layer.put("versionNo",implementation.versionNo());layer.put("contentChecksum",implementation.contentChecksum());}}
     private ObjectNode providerSnapshot(ProviderContractVersion v){ObjectNode n=json.createObjectNode();n.put("semanticVersion",v.semanticVersion().toString());put(n,"requestSchema",v.requestSchema());put(n,"responseSchema",v.responseSchema());put(n,"errorSchema",v.errorSchema());put(n,"callbackSchema",v.callbackSchema());n.put("contentChecksum",v.contentChecksum());return n;}
-    private ObjectNode endpointSnapshot(ProviderEndpoint e,String credential,Long channelId,long providerContractId,Set<String> secrets){ObjectNode n=json.createObjectNode();n.put("endpointCode",e.endpointCode().value());n.put("revisionNo",e.revisionNo());n.put("environmentCode",e.environmentCode());n.put("protocolScheme",e.protocolScheme().value());n.put("baseUrl",e.baseUrl());n.put("resourcePath",e.resourcePath());n.put("httpMethod",e.httpMethod().name());if(e.contentType()!=null)n.put("contentType",e.contentType());n.put("charsetName",e.charsetName());n.put("connectTimeoutMs",e.connectTimeoutMs());n.put("readTimeoutMs",e.readTimeoutMs());n.put("totalTimeoutMs",e.totalTimeoutMs());if(credential!=null)n.put("credentialReference",credential);put(n,"networkConfig",e.networkConfig());put(n,"tlsConfig",e.tlsConfig());n.put("contentChecksum",e.contentChecksum());if(channelId!=null)freezeAccessPlan(n,channelId,providerContractId,e,secrets);return n;}
-    private void freezeAccessPlan(ObjectNode endpoint,long channelId,long contractId,ProviderEndpoint frozen,Set<String> secrets){
+    private ObjectNode endpointSnapshot(ProviderEndpoint e,String credential,Long channelId,long providerContractId,
+            ChannelAuthenticationVersion authentication,Set<String> secrets){ObjectNode n=json.createObjectNode();n.put("endpointCode",e.endpointCode().value());n.put("revisionNo",e.revisionNo());n.put("environmentCode",e.environmentCode());n.put("protocolScheme",e.protocolScheme().value());n.put("baseUrl",e.baseUrl());n.put("resourcePath",e.resourcePath());n.put("httpMethod",e.httpMethod().name());if(e.contentType()!=null)n.put("contentType",e.contentType());n.put("charsetName",e.charsetName());n.put("connectTimeoutMs",e.connectTimeoutMs());n.put("readTimeoutMs",e.readTimeoutMs());n.put("totalTimeoutMs",e.totalTimeoutMs());if(credential!=null)n.put("credentialReference",credential);put(n,"networkConfig",e.networkConfig());put(n,"tlsConfig",e.tlsConfig());n.put("contentChecksum",e.contentChecksum());if(channelId!=null)freezeAccessPlan(n,channelId,providerContractId,e,authentication,secrets);return n;}
+    private void freezeAccessPlan(ObjectNode endpoint,long channelId,long contractId,ProviderEndpoint frozen,
+            ChannelAuthenticationVersion authentication,Set<String> secrets){
         AccessChannel channel=channels.findById(channelId).orElseThrow(()->new IllegalStateException("Frozen access channel does not exist: "+channelId));
         if(channel.status()!=AccessChannelStatus.ACTIVE||!channels.hasInterface(channelId,contractId))throw new IllegalStateException("Frozen access channel is inactive or does not expose the interface");
         if(!channel.baseUrl().equals(frozen.baseUrl()))throw new IllegalStateException("Frozen access channel baseUrl differs from Endpoint");
         ObjectNode plan=json.createObjectNode();plan.put("channelId",channel.id());plan.put("channelCode",channel.channelCode().value());
         ArrayNode parameters=plan.putArray("parameters");
-        for(EffectiveAccessParameter effective:accessResolver.resolve(channels.findParameters(channelId),contractId)){
+        List<EffectiveAccessParameter> effectiveParameters=accessResolver.resolve(channels.findParameters(channelId),contractId);
+        Set<String> configuredTargets=new HashSet<>();
+        for(EffectiveAccessParameter effective:effectiveParameters)configuredTargets.add(
+                effective.parameter().location().name()+":"+effective.parameter().parameterCode());
+        if(authentication!=null){var profile=credentialProfiles.findById(authentication.credentialProfileId())
+                    .orElseThrow(()->new IllegalStateException("Frozen authentication credential profile does not exist"));
+            var profileItems=credentialProfiles.findItems(profile.id());
+            for(CredentialBindingResolver.Binding binding:credentialBindings.resolve(
+                    read(authentication.configurationDocument()),profileItems)){
+                if(configuredTargets.contains(binding.location().name()+":"+binding.parameterName()))continue;
+                ObjectNode item=parameters.addObject();item.put("code",binding.parameterName());item.put("location",binding.location().name());
+                item.put("source","FIXED");item.put("dataType","STRING");item.put("required",true);item.put("sensitive",false);
+                item.put("callerOverridable",false);item.put("resolvedFrom","CREDENTIAL_PROFILE");item.put("value",binding.value());
+            }}
+        for(EffectiveAccessParameter effective:effectiveParameters){
             AccessParameter p=effective.parameter();if(p.source()==AccessParameterSource.EXPRESSION)throw new IllegalStateException("Access parameter EXPRESSION requires a compiled Policy DSL expression: "+p.parameterCode());
             if(p.source()==AccessParameterSource.SECRET_REF&&!Set.of(AccessParameterLocation.HEADER,AccessParameterLocation.COOKIE,AccessParameterLocation.SIGNATURE).contains(p.location()))throw new IllegalStateException("Secret access parameters are limited to HEADER, COOKIE or SIGNATURE: "+p.parameterCode());
             ObjectNode item=parameters.addObject();item.put("code",p.parameterCode());item.put("location",p.location().name());item.put("source",p.source().name());item.put("dataType",p.dataType().name());item.put("required",p.required());item.put("sensitive",p.sensitive());item.put("callerOverridable",p.callerOverridable());item.put("resolvedFrom",effective.resolvedFrom().name());

@@ -23,16 +23,18 @@ public class ChannelAuthenticationApplicationService {
     private final ChannelAuthenticationRepository authentications;
     private final IntegrationPolicyApplicationService policyService;
     private final ChannelAuthenticationPolicyCompiler templateCompiler;
+    private final CredentialBindingResolver credentialBindings;
     private final CanonicalJsonService canonical;
     private final ObjectMapper json;
     public ChannelAuthenticationApplicationService(AccessChannelRepository channels,
             CredentialProfileRepository profiles, CredentialRefRepository secrets,
             AuthenticationTemplateRepository templates, ChannelAuthenticationRepository authentications,
             IntegrationPolicyApplicationService policyService, ChannelAuthenticationPolicyCompiler templateCompiler,
-            CanonicalJsonService canonical, ObjectMapper json) {
+            CredentialBindingResolver credentialBindings, CanonicalJsonService canonical, ObjectMapper json) {
         this.channels = channels; this.profiles = profiles; this.secrets = secrets; this.templates = templates;
         this.authentications = authentications; this.policyService = policyService;
         this.templateCompiler = templateCompiler; this.canonical = canonical; this.json = json;
+        this.credentialBindings = credentialBindings;
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +58,7 @@ public class ChannelAuthenticationApplicationService {
                 ? json.createObjectNode() : object(configuration, "configuration");
         String configurationText = canonical.canonicalString(normalizedConfiguration);
         List<CredentialProfileItem> profileItems = profiles.findItems(profile.id());
+        credentialBindings.resolve(normalizedConfiguration, profileItems);
         Map<Long, com.ftk.tpip.provider.domain.model.CredentialRef> secretRefs = profileItems.stream()
                 .filter(item -> item.secretRefId() != null)
                 .collect(Collectors.toMap(CredentialProfileItem::secretRefId,

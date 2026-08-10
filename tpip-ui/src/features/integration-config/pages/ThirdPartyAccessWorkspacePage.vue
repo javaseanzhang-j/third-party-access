@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { accessChannelApi } from '../api/accessChannelApi'
+import type { AccessParameterAsset, ParameterLocation, ParameterScope, ParameterSource } from '../api/accessChannelApi'
 import { integrationAssetApi, type EndpointMethod } from '../api/integrationAssetApi'
 import { businessIntegrationApi, type BusinessRequestPreview,
   type ChannelAuthenticationVersion, type InterfaceTransportVersion } from '../api/businessIntegrationApi'
@@ -24,6 +25,7 @@ const productInterfaceIds = ref<number[]>([])
 const attachedInterfaceIds = ref<number[]>([])
 const authenticationVersions = ref<ChannelAuthenticationVersion[]>([])
 const transportVersions = ref<InterfaceTransportVersion[]>([])
+const accessParameters = ref<AccessParameterAsset[]>([])
 const contextLoading = ref(false)
 const saving = ref(false)
 const preview = ref<BusinessRequestPreview | null>(null)
@@ -33,6 +35,7 @@ const activeDetailTab = ref('authentication')
 const providerDialog = ref(false); const productDialog = ref(false); const channelDialog = ref(false)
 const interfaceDialog = ref(false); const credentialDialog = ref(false); const authenticationDialog = ref(false)
 const transportDialog = ref(false)
+const parameterDialog = ref(false)
 
 const providerItems = computed(() => providers.data.value?.items ?? [])
 const selectedProvider = computed(() => providerItems.value.find(item => item.id === selectedProviderId.value) ?? null)
@@ -43,7 +46,8 @@ const productChannels = computed(() => (channels.data.value ?? []).filter(item =
 const selectedChannel = computed(() => productChannels.value.find(item => item.id === selectedChannelId.value) ?? null)
 const providerContracts = computed(() => (contracts.data.value?.items ?? []).filter(item => item.providerId === selectedProviderId.value))
 const productInterfaces = computed(() => providerContracts.value.filter(item => productInterfaceIds.value.includes(item.id)))
-const selectedInterface = computed(() => productInterfaces.value.find(item => item.id === selectedInterfaceId.value) ?? null)
+const channelInterfaces = computed(() => productInterfaces.value.filter(item => attachedInterfaceIds.value.includes(item.id)))
+const selectedInterface = computed(() => channelInterfaces.value.find(item => item.id === selectedInterfaceId.value) ?? null)
 const providerProfiles = computed(() => (profiles.data.value ?? []).filter(item => item.profile.providerId === selectedProviderId.value))
 const providerSecrets = computed(() => (credentials.data.value?.items ?? []).filter(item => item.providerId === selectedProviderId.value))
 const availableTemplates = computed(() => (templates.data.value ?? []).filter(item => item.template.status === 'ACTIVE'
@@ -53,6 +57,10 @@ const templateOptions = computed(() => availableTemplates.value.flatMap(item => 
   .map(version => ({ id: version.id, label: item.template.templateName, templateType: item.template.templateType }))))
 const publishedAuthentication = computed(() => authenticationVersions.value.find(item => item.lifecycleStatus === 'PUBLISHED'))
 const publishedTransport = computed(() => transportVersions.value.find(item => item.lifecycleStatus === 'PUBLISHED'))
+const selectedCredentialProfile = computed(() => providerProfiles.value.find(item =>
+  item.profile.id === authenticationForm.credentialProfileId) ?? null)
+const selectedPublicCredentialField = computed(() => selectedCredentialProfile.value?.items.find(item =>
+  item.valueSource === 'PUBLIC_VALUE' && !item.sensitive) ?? null)
 const pageLoading = computed(() => [providers, products, channels, contracts, credentials, profiles, templates]
   .some(item => item.isPending.value))
 
@@ -65,10 +73,16 @@ const interfaceForm = reactive<{ contractCode: string; contractName: string; des
 const credentialForm = reactive({ profileCode: '', profileName: '', credentialType: 'ACCESS_KEY',
   publicFieldName: 'AccessKey ID', publicFieldValue: '', secretFieldName: 'AccessKey Secret', secretRefId: null as number | null })
 const authenticationForm = reactive({ templateVersionId: null as number | null, credentialProfileId: null as number | null,
-  headerName: 'Authorization', prefix: '', sourceTemplate: '${method}\n${path}\n${body}', encoding: 'HEX_LOWER' })
+  headerName: 'Authorization', prefix: '', sourceTemplate: '${method}\n${path}\n${body}', encoding: 'HEX_LOWER',
+  bindPublicCredential: true, identityLocation: 'QUERY' as Exclude<ParameterLocation, 'SIGNATURE'>,
+  identityParameterName: 'AccessKeyId' })
 const transportForm = reactive<{ resourcePath: string; httpMethod: EndpointMethod; contentType: string; charsetName: string
   connectTimeoutMs: number; readTimeoutMs: number; totalTimeoutMs: number }>({ resourcePath: '/', httpMethod: 'POST',
     contentType: 'application/json', charsetName: 'UTF-8', connectTimeoutMs: 1000, readTimeoutMs: 3000, totalTimeoutMs: 5000 })
+const parameterForm = reactive({ scope: 'CHANNEL' as ParameterScope, providerContractId: null as number | null,
+  parameterCode: '', parameterName: '', location: 'HEADER' as ParameterLocation, source: 'FIXED' as ParameterSource,
+  fixedValue: '', sourceSelector: '', secretRefId: null as number | null, overrideMode: 'REPLACE' as 'REPLACE' | 'DISABLE',
+  required: true, sensitive: false, callerOverridable: false, description: '' })
 
 watch(providerItems, items => { if (!selectedProviderId.value && items.length) selectedProviderId.value = items[0]!.id }, { immediate: true })
 watch(selectedProviderId, () => {
@@ -85,17 +99,21 @@ watch(selectedProductId, async value => {
 watch(productChannels, items => {
   if (!items.some(item => item.id === selectedChannelId.value)) selectedChannelId.value = items[0]?.id ?? null
 })
-watch(productInterfaces, items => {
+watch(channelInterfaces, items => {
   if (!items.some(item => item.id === selectedInterfaceId.value)) selectedInterfaceId.value = items[0]?.id ?? null
 })
 watch(selectedChannelId, async value => {
-  attachedInterfaceIds.value = []; authenticationVersions.value = []
+  attachedInterfaceIds.value = []; authenticationVersions.value = []; accessParameters.value = []
   if (!value) return
   contextLoading.value = true
   try {
-    [attachedInterfaceIds.value, authenticationVersions.value] = await Promise.all([
-      accessChannelApi.interfaceIds(value), businessIntegrationApi.channelAuthenticationVersions(value)
+    [attachedInterfaceIds.value, authenticationVersions.value, accessParameters.value] = await Promise.all([
+      accessChannelApi.interfaceIds(value), businessIntegrationApi.channelAuthenticationVersions(value),
+      accessChannelApi.parameters(value)
     ])
+    if (!channelInterfaces.value.some(item => item.id === selectedInterfaceId.value)) {
+      selectedInterfaceId.value = channelInterfaces.value[0]?.id ?? null
+    }
   } finally { contextLoading.value = false }
 })
 watch(selectedInterfaceId, async value => {
@@ -185,8 +203,16 @@ async function createCredentialProfile(): Promise<void> {
 async function createAuthentication(): Promise<void> {
   if (!selectedChannelId.value || !authenticationForm.templateVersionId || !authenticationForm.credentialProfileId)
     { ElMessage.warning('请选择认证方式和账号凭据'); return }
+  if (authenticationForm.bindPublicCredential && selectedPublicCredentialField.value
+      && !authenticationForm.identityParameterName.trim()) {
+    ElMessage.warning('请填写公开账号字段发送给第三方时使用的参数名'); return
+  }
   const selectedTemplate = availableTemplates.value.find(item => item.versions.some(version => version.id === authenticationForm.templateVersionId))
   const configuration: Record<string, unknown> = { headerName: authenticationForm.headerName, prefix: authenticationForm.prefix }
+  if (authenticationForm.bindPublicCredential && selectedPublicCredentialField.value) {
+    configuration.credentialBindings = [{ fieldCode: selectedPublicCredentialField.value.fieldCode,
+      location: authenticationForm.identityLocation, parameterName: authenticationForm.identityParameterName.trim() }]
+  }
   if (selectedTemplate?.template.templateType === 'HMAC_SHA256') {
     configuration.sourceTemplate = authenticationForm.sourceTemplate; configuration.encoding = authenticationForm.encoding
   }
@@ -231,9 +257,48 @@ async function showPreview(): Promise<void> {
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '当前配置还不能生成请求预览') }
   finally { contextLoading.value = false }
 }
+async function saveParameter(): Promise<void> {
+  if (!selectedChannelId.value || !parameterForm.parameterCode.trim() || !parameterForm.parameterName.trim()) {
+    ElMessage.warning('请填写参数名称和发送名称'); return
+  }
+  if (parameterForm.scope === 'INTERFACE' && !parameterForm.providerContractId) {
+    ElMessage.warning('接口专用参数必须选择接口'); return
+  }
+  if (parameterForm.source === 'SECRET_REF' && !parameterForm.secretRefId) {
+    ElMessage.warning('请选择 Secret 引用'); return
+  }
+  if (parameterForm.source === 'SECRET_REF' && !['HEADER', 'COOKIE'].includes(parameterForm.location)) {
+    ElMessage.warning('Secret 只能安全地发送到请求头或 Cookie'); return
+  }
+  let value: unknown = null
+  if (parameterForm.source === 'FIXED') value = parameterForm.fixedValue
+  saving.value = true
+  try {
+    await accessChannelApi.upsertParameter(selectedChannelId.value, { scope: parameterForm.scope,
+      providerContractId: parameterForm.scope === 'INTERFACE' ? parameterForm.providerContractId : null,
+      parameterCode: parameterForm.parameterCode.trim(), parameterName: parameterForm.parameterName.trim(),
+      location: parameterForm.location, source: parameterForm.source, dataType: 'STRING', value,
+      sourceSelector: ['REQUEST','MAPPING_OUTPUT','POLICY_OUTPUT'].includes(parameterForm.source)
+        ? parameterForm.sourceSelector.trim() || null : null,
+      secretRefId: parameterForm.source === 'SECRET_REF' ? parameterForm.secretRefId : null,
+      overrideMode: parameterForm.overrideMode, required: parameterForm.required,
+      sensitive: parameterForm.sensitive || parameterForm.source === 'SECRET_REF',
+      callerOverridable: parameterForm.callerOverridable, description: parameterForm.description.trim() || null })
+    accessParameters.value = await accessChannelApi.parameters(selectedChannelId.value)
+    parameterDialog.value = false; ElMessage.success('请求参数已保存')
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '保存失败') }
+  finally { saving.value = false }
+}
 function publishAuthenticationRow(value: unknown): void { void publishAuthentication(value as ChannelAuthenticationVersion) }
 function publishTransportRow(value: unknown): void { void publishTransport(value as InterfaceTransportVersion) }
 function transportVersionRow(value: unknown): string { return transportVersion(value as InterfaceTransportVersion) }
+function parameterSourceText(value: ParameterSource): string {
+  return { FIXED: '固定值', SECRET_REF: 'Secret 引用', REQUEST: '业务请求传入', SYSTEM_TIME: '系统时间',
+    UUID: '自动生成 UUID', EXPRESSION: '表达式', MAPPING_OUTPUT: '字段映射结果', POLICY_OUTPUT: '规则结果' }[value]
+}
+function parameterLocationText(value: ParameterLocation): string {
+  return { PATH: '路径', QUERY: '查询参数', HEADER: '请求头', COOKIE: 'Cookie', BODY: '请求体', SIGNATURE: '签名' }[value]
+}
 </script>
 
 <template>
@@ -304,8 +369,8 @@ function transportVersionRow(value: unknown): string { return transportVersion(v
               <el-tab-pane label="第三方接口" name="interfaces">
                 <div class="business-pane-heading"><div><h4>当前产品下的第三方接口</h4><p>一个接口维护自己的 Path、请求方式和版本；Base URL 继承当前通道。</p></div>
                   <el-button type="primary" class="create-action" @click="interfaceDialog = true">新增接口</el-button></div>
-                <div class="interface-selector-row"><el-select v-model="selectedInterfaceId" filterable placeholder="选择接口">
-                  <el-option v-for="item in productInterfaces" :key="item.id" :label="item.contractName" :value="item.id" /></el-select>
+                <div class="interface-selector-row"><el-select v-model="selectedInterfaceId" filterable placeholder="选择当前通道的接口">
+                  <el-option v-for="item in channelInterfaces" :key="item.id" :label="item.contractName" :value="item.id" /></el-select>
                   <el-button :disabled="!selectedInterface" @click="transportDialog = true">新增调用版本</el-button>
                   <el-button type="primary" :disabled="!publishedTransport || !publishedAuthentication" @click="showPreview">查看最终请求</el-button></div>
                 <el-empty v-if="!selectedInterface" description="还没有第三方接口" />
@@ -320,9 +385,20 @@ function transportVersionRow(value: unknown): string { return transportVersion(v
                   </el-table></template>
               </el-tab-pane>
 
-              <el-tab-pane label="公共参数与规则" name="advanced"><div class="business-guidance-card"><h4>公共参数和特殊封装</h4>
-                <p>通道公共 Header、Query 参数以及接口专用覆盖仍使用现有受控能力，后续会继续收敛为表单化配置。</p>
-                <router-link :to="`/integration-assets/channels?providerId=${selectedProviderId}&productId=${selectedProductId}&channelId=${selectedChannelId}`">进入参数与规则配置</router-link></div></el-tab-pane>
+              <el-tab-pane label="公共参数与接口覆盖" name="advanced">
+                <div class="business-pane-heading"><div><h4>请求参数封装</h4><p>配置所有接口共用的 Header、Query、Body 参数；某个接口可以覆盖或禁用公共参数。</p></div>
+                  <el-button type="primary" class="create-action" @click="parameterDialog = true">新增请求参数</el-button></div>
+                <el-table :data="accessParameters" size="small" empty-text="还没有请求参数配置">
+                  <el-table-column label="使用范围" width="150"><template #default="scope">{{ scope.row.scope === 'CHANNEL' ? '通道所有接口' : channelInterfaces.find(item => item.id === scope.row.providerContractId)?.contractName ?? '接口专用' }}</template></el-table-column>
+                  <el-table-column label="参数名称" min-width="170"><template #default="scope"><strong>{{ scope.row.parameterName }}</strong><small class="table-secondary">发送为：{{ scope.row.parameterCode }}</small></template></el-table-column>
+                  <el-table-column label="发送位置" width="100"><template #default="scope">{{ parameterLocationText(scope.row.location) }}</template></el-table-column>
+                  <el-table-column label="取值方式" width="120"><template #default="scope">{{ parameterSourceText(scope.row.source) }}</template></el-table-column>
+                  <el-table-column label="预览值" min-width="170"><template #default="scope"><span v-if="scope.row.sensitive">••••••</span><code v-else>{{ scope.row.valueDocument ?? scope.row.sourceSelector ?? '运行时生成' }}</code></template></el-table-column>
+                  <el-table-column label="行为" width="100"><template #default="scope">{{ scope.row.overrideMode === 'DISABLE' ? '禁用公共值' : scope.row.scope === 'CHANNEL' ? '公共配置' : '接口覆盖' }}</template></el-table-column>
+                </el-table>
+                <div class="business-guidance-card"><h4>复杂签名和特殊封装</h4><p>标准参数优先使用上方表单。只有无法表单化的复杂逻辑才进入受控执行规则，高级用户可以继续配置接口专用规则。</p>
+                  <router-link :to="`/integration-assets/channels?providerId=${selectedProviderId}&productId=${selectedProductId}&channelId=${selectedChannelId}`">进入高级执行规则</router-link></div>
+              </el-tab-pane>
             </el-tabs>
           </template>
         </main>
@@ -360,6 +436,9 @@ function transportVersionRow(value: unknown): string { return transportVersion(v
       <el-option v-for="item in templateOptions" :key="item.id" :label="item.label" :value="item.id" /></el-select></el-form-item>
       <el-form-item label="使用账号"><el-select v-model="authenticationForm.credentialProfileId" filterable placeholder="选择账号凭据"><el-option v-for="item in providerProfiles" :key="item.profile.id" :label="item.profile.profileName" :value="item.profile.id" /></el-select></el-form-item>
       <div class="form-two-columns"><el-form-item label="认证头名称"><el-input v-model="authenticationForm.headerName" /></el-form-item><el-form-item label="值前缀"><el-input v-model="authenticationForm.prefix" placeholder="例如：Bearer（可留空）" /></el-form-item></div>
+      <div v-if="selectedPublicCredentialField" class="credential-binding-form"><el-checkbox v-model="authenticationForm.bindPublicCredential">同时发送公开账号字段“{{ selectedPublicCredentialField.fieldName }}”</el-checkbox>
+        <div v-if="authenticationForm.bindPublicCredential" class="form-two-columns"><el-form-item label="发送位置"><el-select v-model="authenticationForm.identityLocation"><el-option label="请求头 Header" value="HEADER" /><el-option label="查询参数 Query" value="QUERY" /><el-option label="请求体 Body" value="BODY" /></el-select></el-form-item>
+          <el-form-item label="第三方要求的参数名"><el-input v-model="authenticationForm.identityParameterName" placeholder="例如：AccessKeyId、appKey" /></el-form-item></div></div>
       <el-form-item v-if="availableTemplates.find(item => item.versions.some(version => version.id === authenticationForm.templateVersionId))?.template.templateType === 'HMAC_SHA256'" label="签名原文模板"><el-input v-model="authenticationForm.sourceTemplate" type="textarea" /></el-form-item></el-form>
       <template #footer><el-button @click="authenticationDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="createAuthentication">保存草稿</el-button></template></el-dialog>
     <el-dialog v-model="transportDialog" title="新增接口调用版本" width="680px"><el-alert type="info" :closable="false" title="版本号由平台自动递增，已发布版本不会被原地修改。" />
@@ -367,6 +446,19 @@ function transportVersionRow(value: unknown): string { return transportVersion(v
         <el-form-item label="接口路径"><el-input v-model="transportForm.resourcePath" /></el-form-item><el-form-item label="报文类型"><el-input v-model="transportForm.contentType" /></el-form-item></div>
         <div class="form-three-columns"><el-form-item label="连接超时（毫秒）"><el-input-number v-model="transportForm.connectTimeoutMs" :min="1" /></el-form-item><el-form-item label="读取超时（毫秒）"><el-input-number v-model="transportForm.readTimeoutMs" :min="1" /></el-form-item><el-form-item label="总超时（毫秒）"><el-input-number v-model="transportForm.totalTimeoutMs" :min="1" /></el-form-item></div></el-form>
       <template #footer><el-button @click="transportDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="createTransport">保存新版本</el-button></template></el-dialog>
+
+    <el-dialog v-model="parameterDialog" title="新增请求参数" width="700px"><el-alert type="info" :closable="false" title="公共参数对当前通道所有接口生效；接口专用配置可以覆盖同名公共参数。" />
+      <el-form label-position="top"><div class="form-two-columns"><el-form-item label="使用范围"><el-radio-group v-model="parameterForm.scope"><el-radio-button value="CHANNEL">通道所有接口</el-radio-button><el-radio-button value="INTERFACE">某个接口专用</el-radio-button></el-radio-group></el-form-item>
+        <el-form-item v-if="parameterForm.scope === 'INTERFACE'" label="选择接口"><el-select v-model="parameterForm.providerContractId" filterable><el-option v-for="item in channelInterfaces" :key="item.id" :label="item.contractName" :value="item.id" /></el-select></el-form-item></div>
+        <div class="form-two-columns"><el-form-item label="业务名称"><el-input v-model="parameterForm.parameterName" placeholder="例如：应用标识" /></el-form-item><el-form-item label="发送给第三方的参数名"><el-input v-model="parameterForm.parameterCode" placeholder="例如：appKey、X-App-Id" /></el-form-item></div>
+        <div class="form-three-columns"><el-form-item label="发送位置"><el-select v-model="parameterForm.location"><el-option label="请求头 Header" value="HEADER" /><el-option label="查询参数 Query" value="QUERY" /><el-option label="请求体 Body" value="BODY" /><el-option label="Cookie" value="COOKIE" /><el-option label="路径参数 Path" value="PATH" /></el-select></el-form-item>
+          <el-form-item label="取值方式"><el-select v-model="parameterForm.source"><el-option label="固定配置值" value="FIXED" /><el-option label="业务请求传入" value="REQUEST" /><el-option label="Secret 引用" value="SECRET_REF" /><el-option label="当前系统时间" value="SYSTEM_TIME" /><el-option label="自动生成 UUID" value="UUID" /><el-option label="字段映射结果" value="MAPPING_OUTPUT" /></el-select></el-form-item>
+          <el-form-item label="覆盖行为"><el-select v-model="parameterForm.overrideMode"><el-option label="设置或覆盖" value="REPLACE" /><el-option v-if="parameterForm.scope === 'INTERFACE'" label="禁用同名公共参数" value="DISABLE" /></el-select></el-form-item></div>
+        <el-form-item v-if="parameterForm.source === 'FIXED'" label="固定值"><el-input v-model="parameterForm.fixedValue" /></el-form-item>
+        <el-form-item v-if="['REQUEST','MAPPING_OUTPUT','POLICY_OUTPUT'].includes(parameterForm.source)" label="取值路径"><el-input v-model="parameterForm.sourceSelector" placeholder="例如：$.tenantId" /></el-form-item>
+        <el-form-item v-if="parameterForm.source === 'SECRET_REF'" label="Secret 引用"><el-select v-model="parameterForm.secretRefId" filterable><el-option v-for="item in providerSecrets" :key="item.id" :label="item.credentialCode" :value="item.id" /></el-select></el-form-item>
+        <div class="parameter-options"><el-checkbox v-model="parameterForm.required">必填</el-checkbox><el-checkbox v-model="parameterForm.sensitive">按敏感值展示</el-checkbox><el-checkbox v-model="parameterForm.callerOverridable">允许调用方覆盖</el-checkbox></div></el-form>
+      <template #footer><el-button @click="parameterDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveParameter">保存参数</el-button></template></el-dialog>
 
     <el-drawer v-model="previewDrawer" title="最终请求预览" size="620px"><template v-if="preview"><el-alert type="success" :closable="false" :title="preview.notice" />
       <div class="request-preview"><span>最终请求</span><strong>{{ preview.target.httpMethod }} {{ preview.target.finalUrl }}</strong>

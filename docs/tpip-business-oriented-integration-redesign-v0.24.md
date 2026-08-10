@@ -131,5 +131,23 @@ POST /control/v1/product-model/services/{serviceId}/targets:provision-business
 - 创建第三方接口时同时创建首个接口调用信息草稿；
 - 接口调用版本号由平台自动生成，用户只维护 Method、Path、报文类型和超时；
 - 组合已发布的通道认证和接口调用版本，查看脱敏的最终请求预览。
+- 在认证配置中把账号凭据里的公开字段（例如 `appKey`、`AccessKeyId`）绑定到第三方要求的 Header、Query 或 Body 参数；
+- 通过表单配置通道所有接口共用的请求参数，以及某个接口的覆盖或禁用项；
+- 请求参数支持固定值、业务请求字段、Secret 引用、系统时间、UUID 和字段映射结果，普通配置不需要编写脚本；
+- 当前通道的接口选择只显示已经绑定到该通道的接口，避免同一产品下其他通道的接口混入。
 
 旧 Provider、CredentialRef、Endpoint 技术配置页面迁移至“高级管理 → 第三方技术资产”。通道参数、原始 Policy、Mapping、BindingVersion 等技术能力不删除，继续作为高级配置和兼容底座。
+
+## 10. OpenAPI 账号字段与请求封装
+
+平台将 OpenAPI 调用中的配置分为三层，避免把 `appKey`、签名密钥和业务参数混在一张无语义的键值表中：
+
+1. **账号凭据**：表示第三方发放的一套账号。`appKey`、`AccessKeyId` 等可公开标识保存为公开字段；`appSecret`、`AccessKeySecret` 等敏感字段只保存 Secret 引用。
+2. **认证方式**：说明这套账号如何参与认证。用户选择账号后，可以把公开字段绑定为第三方要求的参数名和位置；签名密钥由认证模板在运行时使用，页面和 Bundle 都不读取密钥明文。
+3. **请求参数封装**：表示与账号认证无关或需要独立维护的通用 Header、Query、Body、Cookie、Path 参数。通道级参数对当前通道所有接口生效，接口级参数按“位置 + 参数名”覆盖或禁用公共配置。
+
+例如阿里云短信账号的 `AccessKeyId=LTAI...` 可以在“账号与认证”中配置为 Query 参数 `AccessKeyId`；签名密钥选择一个 Secret 引用；短信接口固定要求的 `Format=JSON`、`Version=2017-05-25` 则在“公共参数与接口覆盖”中配置为通道公共 Query 参数。若某个接口使用不同版本，可新增接口专用的同名 `Version` 参数覆盖公共值。
+
+保存认证草稿时，Control Plane 校验公开字段确实属于所选账号、不是敏感字段且目标位置合法。编译 Bundle 时，公开字段的实际配置值会作为非敏感固定参数冻结到 `accessParameterPlan`；Secret 仍只冻结引用。显式请求参数与账号字段绑定目标相同时，以显式请求参数为准，防止重复发送。
+
+Secret 类型请求参数只能通过普通页面发送到 Header 或 Cookie。需要把密钥作为签名输入时，应使用认证模板或高级 Policy DSL，不允许普通用户把 Secret 放入 Query、Path 或 Body。

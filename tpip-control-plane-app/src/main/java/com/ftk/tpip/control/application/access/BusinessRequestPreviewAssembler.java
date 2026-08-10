@@ -12,7 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class BusinessRequestPreviewAssembler {
     private final ObjectMapper json;
-    public BusinessRequestPreviewAssembler(ObjectMapper json) { this.json = json; }
+    private final CredentialBindingResolver credentialBindings;
+    public BusinessRequestPreviewAssembler(ObjectMapper json, CredentialBindingResolver credentialBindings) {
+        this.json = json; this.credentialBindings = credentialBindings;
+    }
 
     public Preview assemble(AccessChannel channel, ProviderContract contract,
             InterfaceTransportVersion transport, ChannelAuthenticationVersion authentication,
@@ -26,9 +29,13 @@ public class BusinessRequestPreviewAssembler {
         List<CredentialField> fields = items.stream().map(item -> credentialField(item, secretRefs)).toList();
         JsonNode step = policy.at("/stages/BEFORE_TRANSPORT/0");
         String headerName = text(step.at("/with/headerName"));
-        var effects = headerName == null ? List.<AuthenticationEffect>of() : List.of(
-                new AuthenticationEffect("HEADER", headerName,
-                        "运行时由认证策略计算并注入；预览不读取 Secret 明文", text(step.get("use"))));
+        List<AuthenticationEffect> effects = new java.util.ArrayList<>();
+        for (CredentialBindingResolver.Binding binding : credentialBindings.resolve(configuration, items)) {
+            effects.add(new AuthenticationEffect(binding.location().name(), binding.parameterName(),
+                    "来自账号凭据公开字段“" + binding.fieldName() + "”", "CREDENTIAL_PUBLIC_VALUE"));
+        }
+        if (headerName != null) effects.add(new AuthenticationEffect("HEADER", headerName,
+                "运行时由认证策略计算并注入；预览不读取 Secret 明文", text(step.get("use"))));
         return new Preview(
                 new Target(channel.id(), channel.channelName(), contract.id(), contract.contractName(),
                         transport.id(), transport.semanticVersion().toString(), join(channel.baseUrl(), transport.resourcePath()),
@@ -36,7 +43,7 @@ public class BusinessRequestPreviewAssembler {
                         transport.connectTimeoutMs(), transport.readTimeoutMs(), transport.totalTimeoutMs(), metadata),
                 new Authentication(authentication.id(), authentication.versionNo(), template.templateName(),
                         template.templateType(), templateVersion.semanticVersion().toString(), profile.profileName(),
-                        configuration, fields, effects),
+                        configuration, fields, List.copyOf(effects)),
                 "READY", "已使用发布版本生成预览；Secret 只显示引用，不读取明文");
     }
 

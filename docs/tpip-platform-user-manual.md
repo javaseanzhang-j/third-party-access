@@ -269,6 +269,15 @@ UUID 或 Secret 引用装配到 Header、Query、Path、Body、Cookie 或签名�
 若 HMAC 原文需要时间戳，可以先在接入通道新增公共参数：编码 `timestamp`、位置 `SIGNATURE`、来源 `SYSTEM_TIME`，然后在
 签名原文中引用 `${context.attributes.signature_timestamp}`。当前向导创建的是该第三方实现专用 Policy。
 
+业务工作区中的“账号与认证”现已支持 OpenAPI 公开账号字段注入。创建账号凭据时，将 `appKey`、`AccessKeyId` 等保存为
+公开账号标识，将 `appSecret`、`AccessKeySecret` 保存为 Secret 引用；配置认证方式时，勾选公开字段并选择发送位置、填写
+第三方参数名。最终请求预览会显示注入位置和参数名，但不会读取 Secret 明文。
+
+“公共参数与接口覆盖”页签用于处理其余请求封装：选择“通道所有接口”可配置公共 Header、Query、Body、Cookie 或 Path
+参数；选择“某个接口专用”可覆盖或禁用同位置、同参数名的公共配置。常规取值方式已经表单化，包括固定值、业务请求传入、
+Secret 引用、系统时间、UUID 和字段映射结果。Secret 在普通页面中仅允许放入 Header 或 Cookie；复杂签名进入高级执行规则。
+当前通道的接口下拉只列出已绑定接口，不会混入同一第三方或产品下其他通道的接口。
+
 通道与接口公共规则在“接入配置 → 接入通道”中维护：
 
 1. 选择一个通道，在“公共规则与接口覆盖”选择“通道公共规则”；
