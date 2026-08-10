@@ -389,3 +389,4 @@ TPIP_RELEASE_EVIDENCE_DIR=/absolute/release/root \
 - 工程目录：`docs/tpip-project-directory-guide.md`；
 - 平台设计：`docs/third-party-integration-platform-redesign.md`；
 - 集成标准：`docs/enterprise-external-system-integration-standard.md`。
+- 调用方接入与服务授权：`docs/tpip-consumer-access-and-service-authorization-v0.25.md`。
