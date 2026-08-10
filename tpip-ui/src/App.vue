@@ -7,6 +7,7 @@ const route = useRoute()
 const activeMenu = computed(() => {
   if (route.path.startsWith('/integration-assets/wizard')) return '/integration-assets/wizard'
   if (route.path.startsWith('/integration-assets/provider-access')) return '/integration-assets/provider-access'
+  if (route.path.startsWith('/integration-assets/advanced/provider-assets')) return '/integration-assets/advanced/provider-assets'
   if (route.path.startsWith('/integration-assets/channels')) return '/integration-assets/channels'
   if (route.path.startsWith('/integration-assets/interfaces')) return '/integration-assets/interfaces'
   if (route.path.startsWith('/integration-assets/services')) return '/integration-assets/services'
@@ -46,29 +47,33 @@ const pageTitle = computed(() => String(route.meta.title ?? 'TPIP 工作台'))
       </div>
       <el-menu :default-active="activeMenu" router class="side-menu">
         <el-sub-menu index="access-configuration">
-          <template #title><span class="menu-dot" /><span>接入配置</span></template>
+          <template #title><span class="menu-dot" /><span>第三方接入</span></template>
+          <el-menu-item index="/integration-assets/provider-access">接入工作区</el-menu-item>
           <el-menu-item index="/integration-assets">接入总览</el-menu-item>
-          <el-menu-item index="/integration-assets/provider-access">第三方系统</el-menu-item>
-          <el-menu-item index="/integration-assets/channels">接入通道</el-menu-item>
-          <el-menu-item index="/integration-assets/interfaces">第三方接口</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="service-management">
           <template #title><span class="menu-dot menu-dot--service" /><span>服务管理</span></template>
           <el-menu-item index="/integration-assets/services">接入服务</el-menu-item>
-          <el-menu-item index="/integration-assets/wizard">测试与发布向导</el-menu-item>
           <el-menu-item index="/integration-assets/runtime-invoke">统一调用控制台</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu index="verification-release">
+          <template #title><span class="menu-dot menu-dot--verification" /><span>验证与发布</span></template>
+          <el-menu-item index="/integration-assets/wizard">测试与发布向导</el-menu-item>
+          <el-menu-item index="/integration-assets/workspaces">配置验证空间</el-menu-item>
+          <el-menu-item index="/integration-assets/releases">评审与发布包</el-menu-item>
+          <el-menu-item index="/integration-assets/deployments">运行版本</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="advanced-assets">
           <template #title><span class="menu-dot menu-dot--advanced" /><span>高级管理</span></template>
+          <el-menu-item index="/integration-assets/advanced/provider-assets">第三方技术资产</el-menu-item>
+          <el-menu-item index="/integration-assets/channels">通道参数与规则</el-menu-item>
+          <el-menu-item index="/integration-assets/interfaces">接口通道关系</el-menu-item>
           <el-menu-item index="/integration-assets/canonical">标准契约资产</el-menu-item>
           <el-menu-item index="/integration-assets/provider-contract-versions">第三方报文结构</el-menu-item>
           <el-menu-item index="/integration-assets/mappings">JSONPath 字段映射</el-menu-item>
           <el-menu-item index="/integration-assets/policies">执行规则</el-menu-item>
           <el-menu-item index="/integration-assets/binding-versions">可执行配置版本</el-menu-item>
           <el-menu-item index="/integration-assets/fixture-suites">验证用例集</el-menu-item>
-          <el-menu-item index="/integration-assets/workspaces">配置验证空间</el-menu-item>
-          <el-menu-item index="/integration-assets/releases">评审与发布包</el-menu-item>
-          <el-menu-item index="/integration-assets/deployments">运行版本</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="operations-governance">
           <template #title><span class="menu-dot menu-dot--governance" /><span>运营治理</span></template>

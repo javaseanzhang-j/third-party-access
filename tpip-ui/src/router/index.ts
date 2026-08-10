@@ -19,7 +19,13 @@ export const router = createRouter({
     {
       path: '/integration-assets/provider-access',
       name: 'provider-access',
-      meta: { title: '第三方系统配置' },
+      meta: { title: '第三方接入工作区' },
+      component: () => import('@/features/integration-config/pages/ThirdPartyAccessWorkspacePage.vue')
+    },
+    {
+      path: '/integration-assets/advanced/provider-assets',
+      name: 'advanced-provider-assets',
+      meta: { title: '第三方技术资产' },
       component: () => import('@/features/integration-config/pages/ProviderAccessPage.vue')
     },
     {

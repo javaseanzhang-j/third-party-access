@@ -113,3 +113,23 @@ POST /control/v1/product-model/services/{serviceId}/targets:provision-business
 5. 把版本号、checksum、Secret 引用和策略来源冻结到 Bundle，Runtime 不回读设计态表。
 
 旧 `/targets:provision` 接口暂时保留，供既有数据和高级管理模式使用；新业务 UI 不再要求用户选择 Endpoint 或手工填写认证 Policy。
+
+## 9. 业务接入工作区 UI
+
+普通用户通过 `/integration-assets/provider-access` 进入“第三方接入工作区”，页面按照以下四步显示完成状态：
+
+1. 第三方系统与产品服务；
+2. 接入通道与 Base URL；
+3. 账号凭据与通道认证；
+4. 第三方接口与接口调用版本。
+
+工作区支持：
+
+- 创建第三方系统、产品服务和接入通道；
+- 创建账号凭据组，公开标识保存配置值，敏感字段只选择 Secret 引用；
+- 选择表单化认证方式，保存草稿并发布；
+- 创建第三方接口时同时创建首个接口调用信息草稿；
+- 接口调用版本号由平台自动生成，用户只维护 Method、Path、报文类型和超时；
+- 组合已发布的通道认证和接口调用版本，查看脱敏的最终请求预览。
+
+旧 Provider、CredentialRef、Endpoint 技术配置页面迁移至“高级管理 → 第三方技术资产”。通道参数、原始 Policy、Mapping、BindingVersion 等技术能力不删除，继续作为高级配置和兼容底座。
