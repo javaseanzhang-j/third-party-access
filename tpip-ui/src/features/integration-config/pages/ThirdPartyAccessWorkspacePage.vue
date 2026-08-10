@@ -7,6 +7,7 @@ import type { AccessParameterAsset, ParameterLocation, ParameterScope, Parameter
 import { integrationAssetApi, type EndpointMethod } from '../api/integrationAssetApi'
 import { businessIntegrationApi, type BusinessRequestPreview,
   type ChannelAuthenticationVersion, type InterfaceTransportVersion } from '../api/businessIntegrationApi'
+import BusinessMessageStructurePanel from '../components/BusinessMessageStructurePanel.vue'
 
 const queryClient = useQueryClient()
 const providers = useQuery({ queryKey: ['business-workspace-providers'], queryFn: ({ signal }) => integrationAssetApi.providers('', signal) })
@@ -26,6 +27,7 @@ const attachedInterfaceIds = ref<number[]>([])
 const authenticationVersions = ref<ChannelAuthenticationVersion[]>([])
 const transportVersions = ref<InterfaceTransportVersion[]>([])
 const accessParameters = ref<AccessParameterAsset[]>([])
+const publishedMessageStructureCount = ref(0)
 const contextLoading = ref(false)
 const saving = ref(false)
 const preview = ref<BusinessRequestPreview | null>(null)
@@ -117,6 +119,7 @@ watch(selectedChannelId, async value => {
   } finally { contextLoading.value = false }
 })
 watch(selectedInterfaceId, async value => {
+  publishedMessageStructureCount.value = 0
   transportVersions.value = value ? await businessIntegrationApi.transportVersions(value) : []
 })
 
@@ -305,7 +308,7 @@ function parameterLocationText(value: ParameterLocation): string {
   <section v-loading="pageLoading" class="business-access-page">
     <div class="business-hero">
       <div><span>第三方接入</span><h2>把一个第三方服务接入平台</h2>
-        <p>从第三方系统和产品出发，依次配置服务通道、账号认证和接口调用。技术执行资产由平台自动生成。</p></div>
+        <p>从第三方系统和产品出发，依次配置服务通道、账号认证、接口调用和报文结构。技术执行资产由平台自动生成。</p></div>
       <el-button type="primary" class="create-action" @click="reset(providerForm,{providerCode:'',providerName:'',description:''}); providerDialog = true">新增第三方系统</el-button>
     </div>
 
@@ -329,6 +332,7 @@ function parameterLocationText(value: ParameterLocation): string {
         <div :class="{ done: productChannels.length }"><span>2</span><strong>接入通道</strong><small>{{ productChannels.length ? `${productChannels.length} 个通道` : '等待配置服务地址' }}</small></div>
         <div :class="{ done: providerProfiles.length && publishedAuthentication }"><span>3</span><strong>账号与认证</strong><small>{{ publishedAuthentication ? '认证配置已发布' : '等待配置账号认证' }}</small></div>
         <div :class="{ done: productInterfaces.length && publishedTransport }"><span>4</span><strong>第三方接口</strong><small>{{ productInterfaces.length ? `${productInterfaces.length} 个接口` : '等待配置接口' }}</small></div>
+        <div :class="{ done: publishedMessageStructureCount }"><span>5</span><strong>报文结构</strong><small>{{ publishedMessageStructureCount ? `${publishedMessageStructureCount} 个已发布版本` : '等待定义请求与返回字段' }}</small></div>
       </div>
 
       <div class="business-workspace">
@@ -383,6 +387,10 @@ function parameterLocationText(value: ParameterLocation): string {
                     <el-table-column label="状态" width="100"><template #default="scope"><el-tag :type="scope.row.lifecycleStatus === 'PUBLISHED' ? 'success' : 'warning'">{{ statusText(scope.row.lifecycleStatus) }}</el-tag></template></el-table-column>
                     <el-table-column label="操作" width="100"><template #default="scope"><el-button v-if="scope.row.lifecycleStatus === 'DRAFT'" link type="primary" @click="publishTransportRow(scope.row)">发布</el-button></template></el-table-column>
                   </el-table></template>
+              </el-tab-pane>
+
+              <el-tab-pane label="报文结构" name="message-structure">
+                <BusinessMessageStructurePanel :interface-id="selectedInterfaceId" :interface-name="selectedInterface?.contractName ?? ''" @published-change="publishedMessageStructureCount = $event" />
               </el-tab-pane>
 
               <el-tab-pane label="公共参数与接口覆盖" name="advanced">
