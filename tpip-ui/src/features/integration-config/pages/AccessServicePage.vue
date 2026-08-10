@@ -7,14 +7,16 @@ import { integrationAssetApi } from '../api/integrationAssetApi'
 import { serviceRouteApi, type DryRunResult, type RoutePolicyView, type RouteTargetConfig } from '../api/serviceRouteApi'
 import { accessChannelApi } from '../api/accessChannelApi'
 import { providerContractVersionApi, type ProviderContractVersionAsset } from '../api/providerContractVersionApi'
-import { parseFieldMappingLines } from '../model/productModel'
+import { businessIntegrationApi, type InterfaceTransportVersion } from '../api/businessIntegrationApi'
+import { canonicalAssetApi, type CanonicalContractVersionAsset } from '../api/canonicalAssetApi'
+import BusinessFieldMappingEditor from '../components/BusinessFieldMappingEditor.vue'
+import { autoMatchFields, exampleFromSchema, executeMappingPreview, extractSchemaFields,
+  type BusinessMappingRow } from '../model/businessFieldMapping'
 
 const queryClient = useQueryClient()
 const servicesQuery = useQuery({ queryKey: ['product-services'], queryFn: ({ signal }) => accessServiceApi.list(signal) })
 const interfacesQuery = useQuery({ queryKey: ['provider-contracts'], queryFn: ({ signal }) => integrationAssetApi.contracts(undefined, signal) })
 const providersQuery = useQuery({ queryKey: ['providers'], queryFn: ({ signal }) => integrationAssetApi.providers('', signal) })
-const endpointsQuery = useQuery({ queryKey: ['product-endpoints'], queryFn: ({ signal }) => integrationAssetApi.endpoints(undefined, signal) })
-const credentialsQuery = useQuery({ queryKey: ['product-credentials'], queryFn: ({ signal }) => integrationAssetApi.credentials(undefined, signal) })
 const channelsQuery = useQuery({ queryKey: ['product-channels'], queryFn: ({ signal }) => accessChannelApi.channels(undefined, signal) })
 const productsQuery = useQuery({ queryKey: ['provider-products'], queryFn: ({ signal }) => accessChannelApi.products(undefined, signal) })
 const services = computed(() => servicesQuery.data.value ?? [])
@@ -35,13 +37,16 @@ const form = reactive({ serviceCode: '', serviceName: '', description: '', invoc
   requestSchemaText: defaultSchema, requestExampleText: '{}', responseSchemaText: defaultSchema, responseExampleText: '{}' })
 const targetForm = reactive({ providerId: undefined as number | undefined, providerProductId: undefined as number | undefined,
   providerContractId: undefined as number | undefined, providerContractVersionId: undefined as number | undefined,
-  accessChannelId: undefined as number | undefined, endpointId: undefined as number | undefined, targetName: '', ownerCode: 'local',
-  requestMappingsText: '$.mobile -> $.phone STRING required', responseMappingsText: '$.success -> $.success BOOLEAN required',
-  authenticationMode: 'CHANNEL_PARAMETERS' as 'CHANNEL_PARAMETERS' | 'API_KEY_POLICY' | 'HMAC_SHA256_POLICY', credentialRefId: undefined as number | undefined,
-  headerName: 'X-API-Key', prefix: '', sourceTemplate: '${context.operationCode}:${context.attributes.signature_timestamp}',
-  encoding: 'HEX_LOWER' as 'HEX_LOWER' | 'BASE64' })
+  accessChannelId: undefined as number | undefined, transportVersionId: undefined as number | undefined,
+  targetName: '', ownerCode: 'local' })
 const channelInterfaces = ref<Record<number, number[]>>({})
 const providerVersions = ref<ProviderContractVersionAsset[]>([])
+const transportVersions = ref<InterfaceTransportVersion[]>([])
+const canonicalRequestVersion = ref<CanonicalContractVersionAsset | null>(null)
+const canonicalResponseVersion = ref<CanonicalContractVersionAsset | null>(null)
+const requestMappingRows = ref<BusinessMappingRow[]>([]); const responseMappingRows = ref<BusinessMappingRow[]>([])
+const requestSampleText = ref('{}'); const providerResponseSampleText = ref('{}')
+const requestPreview = ref<unknown | null>(null); const responsePreview = ref<unknown | null>(null)
 const productInterfaceIds = ref<number[]>([])
 const eligibleProducts = computed(() => (productsQuery.data.value ?? []).filter(item =>
   item.providerId === targetForm.providerId && item.status === 'ACTIVE'))
@@ -52,11 +57,11 @@ const eligibleChannels = computed(() => (channelsQuery.data.value ?? []).filter(
   && item.providerId === selectedInterface.value?.providerId
   && item.providerProductId === targetForm.providerProductId
   && (channelInterfaces.value[item.id] ?? []).includes(targetForm.providerContractId ?? 0)))
-const selectedChannel = computed(() => eligibleChannels.value.find(item => item.id === targetForm.accessChannelId) ?? null)
-const eligibleEndpoints = computed(() => (endpointsQuery.data.value?.items ?? []).filter(item => item.lifecycleStatus === 'PUBLISHED'
-  && item.providerContractId === targetForm.providerContractId && item.baseUrl === selectedChannel.value?.baseUrl))
-const eligibleCredentials = computed(() => (credentialsQuery.data.value?.items ?? []).filter(item => item.status === 'ACTIVE'
-  && item.providerId === selectedInterface.value?.providerId))
+const selectedProviderVersion = computed(() => providerVersions.value.find(item => item.id === targetForm.providerContractVersionId) ?? null)
+const businessRequestFields = computed(() => extractSchemaFields(canonicalRequestVersion.value?.schemaDocument))
+const businessResponseFields = computed(() => extractSchemaFields(canonicalResponseVersion.value?.schemaDocument))
+const providerRequestFields = computed(() => extractSchemaFields(selectedProviderVersion.value?.requestSchema))
+const providerResponseFields = computed(() => extractSchemaFields(selectedProviderVersion.value?.responseSchema))
 
 function parseJson(text: string, label: string, optional = false): unknown {
   if (optional && !text.trim()) return null
@@ -70,34 +75,68 @@ function openDetail(service: unknown): void { detailService.value = service as P
 async function openTarget(): Promise<void> {
   errorMessage.value = ''; targetForm.providerId = undefined; targetForm.providerProductId = undefined
   targetForm.providerContractId = undefined; targetForm.providerContractVersionId = undefined
-  targetForm.accessChannelId = undefined; targetForm.endpointId = undefined; targetForm.targetName = ''; providerVersions.value = []
+  targetForm.accessChannelId = undefined; targetForm.transportVersionId = undefined; targetForm.targetName = ''
+  providerVersions.value = []; transportVersions.value = []; requestMappingRows.value = []; responseMappingRows.value = []
+  requestPreview.value = null; responsePreview.value = null
   targetDialog.value = true
   if (!channelsQuery.data.value) await channelsQuery.refetch()
-  if (!endpointsQuery.data.value) await endpointsQuery.refetch()
   const channels = channelsQuery.data.value ?? []
   channelInterfaces.value = Object.fromEntries(await Promise.all(channels.map(async item => [item.id, await accessChannelApi.interfaceIds(item.id)])))
+  const requestContract = detailService.value?.contracts.find(item => item.kind === 'REQUEST')
+  const responseContract = detailService.value?.contracts.find(item => item.kind === 'RESPONSE')
+  const [requestVersions, responseVersions] = await Promise.all([
+    requestContract ? canonicalAssetApi.versions(requestContract.contractId) : Promise.resolve([]),
+    responseContract ? canonicalAssetApi.versions(responseContract.contractId) : Promise.resolve([])
+  ])
+  canonicalRequestVersion.value = requestVersions.find(item => item.id === requestContract?.versionId) ?? null
+  canonicalResponseVersion.value = responseVersions.find(item => item.id === responseContract?.versionId) ?? null
+  requestSampleText.value = pretty(canonicalRequestVersion.value?.exampleDocument
+    ?? exampleFromSchema(canonicalRequestVersion.value?.schemaDocument))
 }
 function selectTargetProvider(providerId: number): void {
   targetForm.providerId = providerId; targetForm.providerProductId = undefined; targetForm.providerContractId = undefined
   targetForm.providerContractVersionId = undefined; targetForm.accessChannelId = undefined
-  targetForm.endpointId = undefined; providerVersions.value = []; productInterfaceIds.value = []
+  targetForm.transportVersionId = undefined; providerVersions.value = []; transportVersions.value = []; productInterfaceIds.value = []
 }
 async function selectTargetProduct(productId: number): Promise<void> {
   targetForm.providerProductId = productId; targetForm.providerContractId = undefined
   targetForm.providerContractVersionId = undefined; targetForm.accessChannelId = undefined
-  targetForm.endpointId = undefined; providerVersions.value = []
+  targetForm.transportVersionId = undefined; providerVersions.value = []; transportVersions.value = []
   productInterfaceIds.value = await accessChannelApi.productInterfaceIds(productId)
 }
 async function selectTargetInterface(contractId: number): Promise<void> {
   targetForm.providerContractId = contractId; targetForm.providerContractVersionId = undefined
-  providerVersions.value = (await providerContractVersionApi.versions(contractId)).filter(item => item.lifecycleStatus === 'PUBLISHED')
+  const [protocols, transports] = await Promise.all([
+    providerContractVersionApi.versions(contractId), businessIntegrationApi.transportVersions(contractId)
+  ])
+  providerVersions.value = protocols.filter(item => item.lifecycleStatus === 'PUBLISHED')
+  transportVersions.value = transports.filter(item => item.lifecycleStatus === 'PUBLISHED')
   targetForm.providerContractVersionId = providerVersions.value[0]?.id
   targetForm.accessChannelId = eligibleChannels.value[0]?.id
-  targetForm.endpointId = eligibleEndpoints.value[0]?.id
+  targetForm.transportVersionId = transportVersions.value[0]?.id
+  configureMappings()
   const item = selectedInterface.value
   if (item && !targetForm.targetName) targetForm.targetName = `${providerName(item.providerId)}${item.contractName}实现`
 }
-function selectChannel(channelId: number): void { targetForm.accessChannelId = channelId; targetForm.endpointId = eligibleEndpoints.value[0]?.id }
+function selectProtocolVersion(): void { configureMappings() }
+function configureMappings(): void {
+  requestMappingRows.value = autoMatchFields(businessRequestFields.value, providerRequestFields.value)
+  responseMappingRows.value = autoMatchFields(providerResponseFields.value, businessResponseFields.value)
+  const examples = selectedProviderVersion.value?.examples
+  const responseExample = examples && typeof examples === 'object' && !Array.isArray(examples)
+    ? (examples as Record<string, unknown>).response : null
+  providerResponseSampleText.value = pretty(responseExample ?? exampleFromSchema(selectedProviderVersion.value?.responseSchema))
+  requestPreview.value = null; responsePreview.value = null
+}
+function runMappingPreview(): void {
+  errorMessage.value = ''
+  try {
+    requestPreview.value = executeMappingPreview(parseJson(requestSampleText.value, '业务请求样例'), requestMappingRows.value)
+    responsePreview.value = executeMappingPreview(parseJson(providerResponseSampleText.value, '第三方返回样例'), responseMappingRows.value)
+    ElMessage.success('请求和返回映射预览通过')
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : '映射预览失败' }
+}
+function pretty(value: unknown): string { return JSON.stringify(value ?? {}, null, 2) }
 const createService = useMutation({
   mutationFn: (input: CreateAccessServiceInput) => accessServiceApi.create(input),
   onSuccess: async created => { createDialog.value = false; await queryClient.invalidateQueries({ queryKey: ['product-services'] }); openDetail(created); ElMessage.success('接入服务与标准契约已创建') },
@@ -115,26 +154,25 @@ function submitCreate(): void {
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'JSON 格式错误' }
 }
 const addTarget = useMutation({
-  mutationFn: () => accessServiceApi.provisionTarget(detailService.value!.id, { providerContractId: targetForm.providerContractId!,
-    providerContractVersionId: targetForm.providerContractVersionId!, accessChannelId: targetForm.accessChannelId!, endpointId: targetForm.endpointId!,
+  mutationFn: () => accessServiceApi.provisionBusinessTarget(detailService.value!.id, { providerContractId: targetForm.providerContractId!,
+    providerContractVersionId: targetForm.providerContractVersionId!, accessChannelId: targetForm.accessChannelId!,
+    transportVersionId: targetForm.transportVersionId!,
     targetName: targetForm.targetName.trim(), ownerCode: targetForm.ownerCode.trim(),
-    requestMappings: parseFieldMappingLines(targetForm.requestMappingsText), responseMappings: parseFieldMappingLines(targetForm.responseMappingsText),
-    authentication: { mode: targetForm.authenticationMode, credentialRefId: targetForm.authenticationMode === 'CHANNEL_PARAMETERS' ? null : targetForm.credentialRefId ?? null,
-      headerName: targetForm.authenticationMode === 'CHANNEL_PARAMETERS' ? null : targetForm.headerName.trim(),
-      prefix: targetForm.authenticationMode === 'CHANNEL_PARAMETERS' ? null : targetForm.prefix,
-      sourceTemplate: targetForm.authenticationMode === 'HMAC_SHA256_POLICY' ? targetForm.sourceTemplate : null,
-      encoding: targetForm.authenticationMode === 'HMAC_SHA256_POLICY' ? targetForm.encoding : null } }),
+    requestMappings: requestMappingRows.value, responseMappings: responseMappingRows.value }),
   onSuccess: async () => { targetDialog.value = false; await queryClient.invalidateQueries({ queryKey: ['product-services'] }); detailService.value = await accessServiceApi.get(detailService.value!.id); ElMessage.success('第三方实现、字段映射和可执行版本已发布') },
   onError: error => { errorMessage.value = error instanceof Error ? error.message : '添加失败' }
 })
 function submitTarget(): void {
   errorMessage.value = ''
-  if (!targetForm.providerContractId || !targetForm.providerContractVersionId || !targetForm.accessChannelId || !targetForm.endpointId
-    || !targetForm.targetName.trim() || !targetForm.ownerCode.trim()) { errorMessage.value = '请完成接口、通道、报文结构版本、执行地址和实现名称配置'; return }
-  if (targetForm.authenticationMode !== 'CHANNEL_PARAMETERS' && !targetForm.credentialRefId) { errorMessage.value = '认证规则必须选择凭据'; return }
-  if (targetForm.authenticationMode === 'HMAC_SHA256_POLICY' && !targetForm.sourceTemplate.trim()) { errorMessage.value = 'HMAC 签名原文不能为空'; return }
-  try { parseFieldMappingLines(targetForm.requestMappingsText); parseFieldMappingLines(targetForm.responseMappingsText); addTarget.mutate() }
-  catch (error) { errorMessage.value = error instanceof Error ? error.message : '字段映射格式错误' }
+  if (!targetForm.providerContractId || !targetForm.providerContractVersionId || !targetForm.accessChannelId
+    || !targetForm.transportVersionId || !targetForm.targetName.trim() || !targetForm.ownerCode.trim()) {
+    errorMessage.value = '请完成接口、通道、报文结构版本、调用版本和实现名称配置'; return
+  }
+  if (!requestMappingRows.value.length || !responseMappingRows.value.length) {
+    errorMessage.value = '请求和返回至少各配置一条字段映射'; return
+  }
+  try { runMappingPreview(); if (!errorMessage.value) addTarget.mutate() }
+  catch (error) { errorMessage.value = error instanceof Error ? error.message : '字段映射配置错误' }
 }
 async function openRoute(): Promise<void> {
   if (!detailService.value) return
@@ -191,34 +229,26 @@ const runDryRoute = useMutation({ mutationFn: () => {
 
     <el-drawer :model-value="detailService !== null" size="780px" title="接入服务详情" @close="detailService = null"><template v-if="detailService"><div class="product-detail-title"><span>业务调用编码</span><strong class="mono">{{ detailService.serviceCode }}</strong><p>{{ detailService.serviceName }} · {{ detailService.description || '暂无说明' }}</p></div><div class="drawer-section"><h3>业务标准报文</h3><el-table :data="detailService.contracts" size="small"><el-table-column label="方向"><template #default="{ row }">{{ row.kind === 'REQUEST' ? '业务请求' : '业务返回' }}</template></el-table-column><el-table-column prop="contractName" label="名称" /><el-table-column label="版本"><template #default="{ row }"><el-tag type="success">{{ row.semanticVersion }} · {{ row.lifecycleStatus }}</el-tag></template></el-table-column></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>第三方实现</strong><span>同一个 serviceCode 可以绑定多家厂商接口。</span></div><el-button type="primary" @click="openTarget">＋ 添加第三方实现</el-button></div><el-empty v-if="!detailService.targets.length" description="尚未添加第三方实现" /><el-table v-else :data="detailService.targets" size="small"><el-table-column prop="targetName" label="实现名称" /><el-table-column prop="providerName" label="提供方" /><el-table-column prop="interfaceName" label="第三方接口" /><el-table-column prop="status" label="状态" width="90" /></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>多目标路由</strong><span>先匹配条件和健康状态，再选最小优先级组，最后按权重选择。</span></div><el-button type="primary" :disabled="!detailService.targets.length" @click="openRoute">配置路由</el-button></div></div></template></el-drawer>
 
-    <el-dialog v-model="targetDialog" class="target-provision-dialog" title="添加可执行的第三方实现" width="980px" :close-on-click-modal="false">
-      <el-alert type="success" :closable="false" show-icon title="完成一次提交后，平台会自动创建并发布请求映射、返回映射和可执行配置版本，不需要再进入高级管理逐项拼装。" />
+    <el-dialog v-model="targetDialog" class="target-provision-dialog" title="添加可执行的第三方实现" width="1180px" :close-on-click-modal="false">
+      <el-alert type="success" :closable="false" show-icon title="选择通道和接口调用版本后，平台自动生成执行地址并继承通道认证；提交后自动发布双向映射和可执行配置。" />
       <el-form class="dialog-form" label-position="top">
         <h3>1. 选择第三方接口与通道</h3>
         <div class="form-two-columns">
           <el-form-item label="第三方提供方" required><el-select v-model="targetForm.providerId" filterable style="width:100%" placeholder="先选择提供方" @change="selectTargetProvider"><el-option v-for="item in providersQuery.data.value?.items ?? []" :key="item.id" :value="item.id" :label="item.providerName" /></el-select></el-form-item>
           <el-form-item label="产品/服务" required><el-select v-model="targetForm.providerProductId" filterable :disabled="!targetForm.providerId" style="width:100%" placeholder="例如：短信服务" @change="selectTargetProduct"><el-option v-for="item in eligibleProducts" :key="item.id" :value="item.id" :label="item.productName" /></el-select></el-form-item>
           <el-form-item label="第三方接口" required><el-select v-model="targetForm.providerContractId" filterable :disabled="!targetForm.providerProductId" style="width:100%" placeholder="只显示当前产品服务的接口" @change="selectTargetInterface"><el-option v-for="item in eligibleInterfaces" :key="item.id" :value="item.id" :label="item.contractName" /></el-select></el-form-item>
-          <el-form-item label="报文结构版本" required><el-select v-model="targetForm.providerContractVersionId" style="width:100%" placeholder="选择已发布版本"><el-option v-for="item in providerVersions" :key="item.id" :value="item.id" :label="`${item.semanticVersion} · 内部修订 ${item.versionNo}`" /></el-select><small class="form-hint">定义该接口请求、返回、错误和回调报文的字段结构。</small></el-form-item>
-          <el-form-item label="接入通道" required><el-select v-model="targetForm.accessChannelId" style="width:100%" placeholder="选择已关联该接口的通道" @change="selectChannel"><el-option v-for="item in eligibleChannels" :key="item.id" :value="item.id" :label="`${item.channelName} · ${item.baseUrl}`" /></el-select><small class="form-hint">通道中的 appKey、appSecret 等公共参数会自动继承，接口参数可以覆盖。</small></el-form-item>
-          <el-form-item label="实际调用地址" required><el-select v-model="targetForm.endpointId" style="width:100%" placeholder="选择与通道 URL 一致的地址"><el-option v-for="item in eligibleEndpoints" :key="item.id" :value="item.id" :label="`${item.httpMethod} ${item.baseUrl}${item.resourcePath}`" /></el-select></el-form-item>
+          <el-form-item label="报文结构版本" required><el-select v-model="targetForm.providerContractVersionId" style="width:100%" placeholder="选择已发布版本" @change="selectProtocolVersion"><el-option v-for="item in providerVersions" :key="item.id" :value="item.id" :label="`${item.semanticVersion} · 内部修订 ${item.versionNo}`" /></el-select><small class="form-hint">选择后自动读取第三方请求与返回字段。</small></el-form-item>
+          <el-form-item label="接入通道" required><el-select v-model="targetForm.accessChannelId" style="width:100%" placeholder="选择已关联该接口的通道"><el-option v-for="item in eligibleChannels" :key="item.id" :value="item.id" :label="`${item.channelName} · ${item.baseUrl}`" /></el-select><small class="form-hint">自动继承该通道已发布的账号认证、公共参数和接口覆盖。</small></el-form-item>
+          <el-form-item label="接口调用版本" required><el-select v-model="targetForm.transportVersionId" style="width:100%" placeholder="选择已发布调用版本"><el-option v-for="item in transportVersions" :key="item.id" :value="item.id" :label="`${typeof item.semanticVersion === 'string' ? item.semanticVersion : `${item.semanticVersion.major}.${item.semanticVersion.minor}.${item.semanticVersion.patch}`} · ${item.httpMethod} ${item.resourcePath}`" /></el-select><small class="form-hint">最终地址由通道 Base URL 和这里的接口 Path 自动组合。</small></el-form-item>
         </div>
         <el-alert v-if="targetForm.providerContractId && !eligibleChannels.length" type="warning" :closable="false" title="该接口还没有可用通道，请先在“接入通道”中关联接口并配置公共参数。" />
+        <el-alert v-else-if="targetForm.providerContractId && !transportVersions.length" type="warning" :closable="false" title="该接口还没有已发布调用版本，请先在“第三方接入”中配置并发布 Method 与 Path。" />
         <h3>2. 配置业务字段与第三方字段</h3>
-        <div class="schema-two-columns">
-          <el-form-item label="请求字段映射" required><el-input v-model="targetForm.requestMappingsText" type="textarea" :rows="7" class="schema-editor" /><small class="form-hint">每行一条：$.业务字段 -&gt; $.第三方字段 [STRING/NUMBER/BOOLEAN/OBJECT/ARRAY] [required]</small></el-form-item>
-          <el-form-item label="返回字段映射" required><el-input v-model="targetForm.responseMappingsText" type="textarea" :rows="7" class="schema-editor" /><small class="form-hint">方向相反：$.第三方字段 -&gt; $.业务字段。</small></el-form-item>
-        </div>
-        <h3>3. 认证规则</h3>
-        <el-radio-group v-model="targetForm.authenticationMode"><el-radio-button value="CHANNEL_PARAMETERS">使用通道公共参数</el-radio-button><el-radio-button value="API_KEY_POLICY">API Key</el-radio-button><el-radio-button value="HMAC_SHA256_POLICY">HMAC-SHA256 签名</el-radio-button></el-radio-group>
-        <div v-if="targetForm.authenticationMode !== 'CHANNEL_PARAMETERS'" class="form-two-columns" style="margin-top:14px">
-          <el-form-item label="Secret 凭据" required><el-select v-model="targetForm.credentialRefId" style="width:100%"><el-option v-for="item in eligibleCredentials" :key="item.id" :value="item.id" :label="`${item.credentialCode} · ${item.environmentCode}`" /></el-select></el-form-item>
-          <el-form-item label="Header 名称"><el-input v-model="targetForm.headerName" :placeholder="targetForm.authenticationMode === 'API_KEY_POLICY' ? 'X-API-Key' : 'X-Signature'" /></el-form-item>
-          <el-form-item label="值前缀"><el-input v-model="targetForm.prefix" placeholder="例如 Bearer（可留空）" /></el-form-item>
-          <el-form-item v-if="targetForm.authenticationMode === 'HMAC_SHA256_POLICY'" label="签名编码"><el-select v-model="targetForm.encoding" style="width:100%"><el-option label="小写十六进制" value="HEX_LOWER" /><el-option label="Base64" value="BASE64" /></el-select></el-form-item>
-          <el-form-item v-if="targetForm.authenticationMode === 'HMAC_SHA256_POLICY'" label="签名原文模板" required style="grid-column:1 / -1"><el-input v-model="targetForm.sourceTemplate" type="textarea" :rows="3" class="schema-editor" /><small class="form-hint">可引用 context、provider 等受控变量；示例依赖通道中 code=timestamp、位置=SIGNATURE 的公共时间参数。</small></el-form-item>
-        </div>
-        <h3>4. 实现信息</h3>
+        <el-alert v-if="targetForm.providerContractVersionId && (!businessRequestFields.length || !providerRequestFields.length || !businessResponseFields.length || !providerResponseFields.length)" type="warning" :closable="false" title="业务标准报文或第三方报文缺少可选择字段；请先补充 JSON Schema properties。" />
+        <div class="mapping-direction-card"><div><strong>请求转换</strong><small>业务系统请求 → 第三方请求</small></div><BusinessFieldMappingEditor v-model="requestMappingRows" :source-fields="businessRequestFields" :target-fields="providerRequestFields" source-label="业务请求字段" target-label="第三方请求字段" /></div>
+        <div class="mapping-direction-card"><div><strong>返回转换</strong><small>第三方返回 → 业务标准返回</small></div><BusinessFieldMappingEditor v-model="responseMappingRows" :source-fields="providerResponseFields" :target-fields="businessResponseFields" source-label="第三方返回字段" target-label="业务返回字段" /></div>
+        <div class="mapping-preview-panel"><div class="mapping-preview-heading"><div><strong>映射样例预览</strong><small>使用契约中保存的样例检查字段路径、必填和类型转换。</small></div><el-button type="primary" @click="runMappingPreview">执行双向预览</el-button></div><div class="mapping-preview-grid"><label><span>业务请求样例</span><el-input v-model="requestSampleText" type="textarea" :rows="7" class="schema-editor" /></label><label><span>转换后的第三方请求</span><pre>{{ pretty(requestPreview) }}</pre></label><label><span>第三方返回样例</span><el-input v-model="providerResponseSampleText" type="textarea" :rows="7" class="schema-editor" /></label><label><span>转换后的业务返回</span><pre>{{ pretty(responsePreview) }}</pre></label></div></div>
+        <h3>3. 实现信息</h3>
         <div class="form-two-columns"><el-form-item label="实现名称" required><el-input v-model="targetForm.targetName" placeholder="例如：阿里云短信实现" /></el-form-item><el-form-item label="负责人"><el-input v-model="targetForm.ownerCode" /></el-form-item></div>
         <p v-if="errorMessage" class="command-validation">{{ errorMessage }}</p>
       </el-form>

@@ -171,4 +171,24 @@ Secret 类型请求参数只能通过普通页面发送到 Header 或 Cookie。�
 
 平台根据字段表单生成 JSON Schema 和请求/返回样例。嵌套对象可直接使用多段 JSONPath；数组元素、多态结构、`oneOf` 等复杂协议切换“高级 JSON Schema”维护。多个版本可以同时处于“已发布”状态，用于历史追溯和回滚，但一次可执行实现只冻结其中一个版本。
 
-字段映射不放在第三方接口配置页：映射关系必须同时看到业务标准报文和第三方报文，因此继续在“业务服务 → 添加第三方实现”中配置。下一阶段将把该处当前的映射文本进一步改造成左右字段联动选择和样例即时测试。
+字段映射不放在第三方接口配置页：映射关系必须同时看到业务标准报文和第三方报文，因此在“业务服务 → 添加第三方实现”中配置。该流程现已改为左右字段联动选择、JSONPath 自动生成和双向样例即时预览。
+
+## 12. 业务化字段映射与实现生成
+
+添加第三方实现时，普通用户只选择第三方、产品、接口、已发布报文结构版本、接入通道和已发布接口调用版本。页面不再暴露旧 Endpoint，也不再要求重复选择 Secret 或配置认证 Policy：
+
+- Endpoint 执行快照由平台根据“通道 Base URL + 接口调用版本 Method/Path/超时”自动生成并发布；
+- 账号认证、公开账号字段、通道公共参数和接口覆盖继承所选通道的已发布配置；
+- 业务标准请求/返回字段从 Canonical Contract Version 的 JSON Schema 提取；
+- 第三方请求/返回字段从所选 Provider Contract Version 的 JSON Schema 提取。
+
+映射工作台分为两个方向：
+
+1. 请求转换：业务标准请求字段 → 第三方请求字段；
+2. 返回转换：第三方返回字段 → 业务标准返回字段。
+
+字段下拉同时显示中文名称、JSONPath 和必填状态。平台按路径末级字段名进行一次不重复的自动匹配，用户补充不一致字段，例如 `$.mobile → $.PhoneNumbers`。选择目标字段后自动带出目标类型和必填约束，仍可按实际协议调整。
+
+样例预览默认读取业务标准契约的请求样例和第三方报文版本的返回样例；没有显式样例时，根据 Schema 的 `example`、`default` 和字段类型生成基础样例。预览同时执行请求与返回方向，检查路径存在性、必填字段和 STRING/NUMBER/BOOLEAN/OBJECT/ARRAY 类型转换。最终提交仍由服务端 Mapping Compiler 重新编译和校验，前端预览不能绕过服务端约束。
+
+页面通过 `POST /control/v1/product-model/services/{serviceId}/targets:provision-business` 一次提交。Control Plane 在同一事务内生成 Endpoint 快照、双向 MappingVersion、BindingVersion 并发布；任一步失败均整体回滚。旧 `/targets:provision` 仅保留兼容使用。

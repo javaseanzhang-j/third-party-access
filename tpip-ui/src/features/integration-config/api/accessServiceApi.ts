@@ -36,6 +36,12 @@ export interface ProvisionedAdapterTarget {
   accessChannelId: number; endpointId: number; requestMappingVersionId: number
   responseMappingVersionId: number; policyVersionId: number | null
 }
+export interface BusinessProvisionAdapterTargetInput {
+  providerContractId: number; providerContractVersionId: number; accessChannelId: number; transportVersionId: number
+  targetName: string; ownerCode: string
+  requestMappings: Array<{ sourcePath: string; targetPath: string; targetType: string; required: boolean }>
+  responseMappings: Array<{ sourcePath: string; targetPath: string; targetType: string; required: boolean }>
+}
 
 const operator = (import.meta.env.VITE_TPIP_OPERATOR as string | undefined)?.trim() || 'local-ui'
 const headers = { 'X-Operator': operator }
@@ -47,5 +53,7 @@ export const accessServiceApi = {
   addTarget: (id: number, input: AddAdapterTargetInput) => postJson<AdapterTargetView>(
     `/control/v1/product-model/services/${id}/targets`, input, headers),
   provisionTarget: (id: number, input: ProvisionAdapterTargetInput) => postJson<ProvisionedAdapterTarget>(
-    `/control/v1/product-model/services/${id}/targets:provision`, input, headers)
+    `/control/v1/product-model/services/${id}/targets:provision`, input, headers),
+  provisionBusinessTarget: (id: number, input: BusinessProvisionAdapterTargetInput) => postJson<ProvisionedAdapterTarget>(
+    `/control/v1/product-model/services/${id}/targets:provision-business`, input, headers)
 }

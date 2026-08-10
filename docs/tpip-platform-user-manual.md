@@ -260,14 +260,14 @@ API 契约见 `docs/tpip-product-model-and-ui-redesign-v0.23.md`。
 UUID 或 Secret 引用装配到 Header、Query、Path、Body、Cookie 或签名输入中。Secret 原文不会进入设计库或 Bundle；表达式逻辑
 必须使用 Policy DSL，不能提交任意 Groovy。旧 BindingVersion 没有关联通道时仍按原有方式执行。
 
-“服务管理 → 接入服务 → 查看与管理 → 添加第三方实现”现在提供完整执行向导。依次选择第三方接口、已发布报文结构版本、
-接入通道和实际调用地址，然后按 `$.来源字段 -> $.目标字段 [类型] [required]` 填写请求与返回字段映射。认证可以直接
-继承通道公共参数，也可以选择 API Key 或 HMAC-SHA256 模板。HMAC 模板需要选择 Secret 凭据，并填写签名 Header、签名
-原文模板、十六进制/Base64 编码和可选前缀；密钥原文不会进入配置或 Bundle。点击“校验、生成并发布实现”后，平台在同一
-事务中生成双向 Mapping、可选 Policy 和已发布 BindingVersion；失败时不会留下半套资产。RSA 和 OAuth2 模板尚未进入本版本。
+“服务管理 → 接入服务 → 查看与管理 → 添加第三方实现”提供完整执行向导。依次选择第三方接口、已发布报文结构版本、
+接入通道和已发布接口调用版本；实际 Endpoint 由平台根据通道 Base URL 与接口 Method/Path 自动生成。账号凭据、认证方式、
+公共参数和接口覆盖全部继承通道配置，不在这里重复填写 Secret 或签名规则。
 
-若 HMAC 原文需要时间戳，可以先在接入通道新增公共参数：编码 `timestamp`、位置 `SIGNATURE`、来源 `SYSTEM_TIME`，然后在
-签名原文中引用 `${context.attributes.signature_timestamp}`。当前向导创建的是该第三方实现专用 Policy。
+字段映射区自动读取业务标准报文与第三方报文的字段，通过左右下拉框配置“业务请求 → 第三方请求”和“第三方返回 → 业务
+返回”。字段名称相同的项目会自动预匹配；名称不同的字段由用户选择对应关系。点击“执行双向预览”可使用契约样例检查
+JSONPath、必填字段和类型转换。点击“校验、生成并发布实现”后，平台在同一事务中生成 Endpoint 快照、双向 Mapping 和已发布
+BindingVersion；失败时不会留下半套资产。
 
 业务工作区中的“账号与认证”现已支持 OpenAPI 公开账号字段注入。创建账号凭据时，将 `appKey`、`AccessKeyId` 等保存为
 公开账号标识，将 `appSecret`、`AccessKeySecret` 保存为 Secret 引用；配置认证方式时，勾选公开字段并选择发送位置、填写

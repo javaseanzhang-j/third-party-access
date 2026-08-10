@@ -42,4 +42,20 @@ describe('access service product api', () => {
     expect(path).toBe('/control/v1/product-model/services/7/targets:provision')
     expect(JSON.parse(String(init.body))).toMatchObject({ accessChannelId: 5, endpointId: 6 })
   })
+  it('provisions the business target without exposing endpoint or duplicate authentication', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ bindingVersionId: 20 }), {
+      status: 201, headers: { 'Content-Type': 'application/json' }
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    await accessServiceApi.provisionBusinessTarget(7, { providerContractId: 3, providerContractVersionId: 4,
+      accessChannelId: 5, transportVersionId: 8, targetName: '阿里云短信实现', ownerCode: 'local',
+      requestMappings: [{ sourcePath: '$.mobile', targetPath: '$.phone', targetType: 'STRING', required: true }],
+      responseMappings: [{ sourcePath: '$.ok', targetPath: '$.accepted', targetType: 'BOOLEAN', required: true }] })
+    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(path).toBe('/control/v1/product-model/services/7/targets:provision-business')
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>
+    expect(body).toMatchObject({ accessChannelId: 5, transportVersionId: 8 })
+    expect(body).not.toHaveProperty('endpointId')
+    expect(body).not.toHaveProperty('authentication')
+  })
 })
