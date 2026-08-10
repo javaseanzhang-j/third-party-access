@@ -9,6 +9,7 @@ import com.ftk.tpip.control.application.integration.IntegrationBindingVersionApp
 import com.ftk.tpip.control.application.integration.IntegrationMappingApplicationService;
 import com.ftk.tpip.control.application.integration.IntegrationPolicyApplicationService;
 import com.ftk.tpip.control.application.integration.MappingRuleInput;
+import com.ftk.tpip.control.application.provider.ProviderEndpointApplicationService;
 import com.ftk.tpip.integration.domain.model.*;
 import com.ftk.tpip.integration.domain.repository.IntegrationBindingRepository;
 import com.ftk.tpip.provider.domain.model.*;
@@ -38,6 +39,8 @@ public class AccessServiceProductApplicationService {
     private final IntegrationPolicyApplicationService policyService;
     private final IntegrationBindingVersionApplicationService bindingVersionService;
     private final AccessChannelRepository accessChannels;
+    private final InterfaceTransportRepository interfaceTransports;
+    private final ProviderEndpointApplicationService endpointService;
 
     public AccessServiceProductApplicationService(CatalogHierarchyRepository catalog,
             CanonicalOperationRepository operations, CanonicalContractRepository contracts,
@@ -47,7 +50,8 @@ public class AccessServiceProductApplicationService {
             IntegrationMappingApplicationService mappingService,
             IntegrationPolicyApplicationService policyService,
             IntegrationBindingVersionApplicationService bindingVersionService,
-            AccessChannelRepository accessChannels) {
+            AccessChannelRepository accessChannels, InterfaceTransportRepository interfaceTransports,
+            ProviderEndpointApplicationService endpointService) {
         this.catalog = catalog;
         this.operations = operations;
         this.contracts = contracts;
@@ -58,6 +62,8 @@ public class AccessServiceProductApplicationService {
         this.endpoints = endpoints; this.credentials = credentials; this.mappingService = mappingService;
         this.policyService = policyService; this.bindingVersionService = bindingVersionService;
         this.accessChannels = accessChannels;
+        this.interfaceTransports = interfaceTransports;
+        this.endpointService = endpointService;
     }
 
     @Transactional
@@ -160,6 +166,42 @@ public class AccessServiceProductApplicationService {
         version = bindingVersionService.publish(binding.id(), version.id(), user);
         return new ProvisionedTargetView(target(binding), version.id(), version.versionNo(), version.lifecycleStatus(),
                 command.accessChannelId(), endpoint.id(), outboundVersion.id(), inboundVersion.id(), policyVersionId);
+    }
+
+    /**
+     * Business-model entry point. The caller selects a channel and an interface transport version;
+     * the legacy Endpoint execution snapshot is generated and published automatically.
+     */
+    @Transactional
+    public ProvisionedTargetView provisionBusinessTarget(long serviceId,
+            BusinessProvisionTargetCommand command, String actor) {
+        String user = actor(actor);
+        ProviderContract contract = providerContracts.findById(command.providerContractId())
+                .orElseThrow(() -> new IllegalArgumentException("The selected third-party interface does not exist"));
+        var channel = accessChannels.findById(command.accessChannelId())
+                .orElseThrow(() -> new IllegalArgumentException("The selected access channel does not exist"));
+        if (channel.providerId() != contract.providerId()
+                || !accessChannels.hasInterface(channel.id(), contract.id()))
+            throw new IllegalArgumentException("The access channel must contain the selected third-party interface");
+        InterfaceTransportVersion transport = interfaceTransports
+                .findVersionById(contract.id(), command.transportVersionId())
+                .orElseThrow(() -> new IllegalArgumentException("The selected interface transport version does not exist"));
+        if (transport.lifecycleStatus() != EndpointLifecycleStatus.PUBLISHED)
+            throw new IllegalArgumentException("The selected interface transport version must be PUBLISHED");
+        int connectTimeout = transport.connectTimeoutMs() == null ? 3_000 : transport.connectTimeoutMs();
+        int readTimeout = transport.readTimeoutMs() == null ? 5_000 : transport.readTimeoutMs();
+        int totalTimeout = transport.totalTimeoutMs() == null
+                ? Math.max(8_000, Math.max(connectTimeout, readTimeout)) : transport.totalTimeoutMs();
+        EndpointScheme scheme = EndpointScheme.fromValue(java.net.URI.create(channel.baseUrl()).getScheme());
+        ProviderEndpoint endpoint = endpointService.createRevision(contract.id(),
+                "generated.c" + channel.id() + ".i" + contract.id(), "local", scheme,
+                channel.baseUrl(), transport.resourcePath(), transport.httpMethod(), transport.contentType(),
+                transport.charsetName(), connectTimeout, readTimeout, totalTimeout, null, null, null, user);
+        endpoint = endpointService.publish(endpoint.id(), user);
+        return provisionTarget(serviceId, new ProvisionTargetCommand(command.providerContractId(),
+                command.providerContractVersionId(), command.accessChannelId(), endpoint.id(),
+                command.targetName(), command.ownerCode(), command.requestMappings(),
+                command.responseMappings(), null), user);
     }
 
     private Long createPolicy(IntegrationBinding binding, AuthenticationTemplate authentication, String actor) {
@@ -303,6 +345,9 @@ public class AccessServiceProductApplicationService {
     public record ProvisionTargetCommand(long providerContractId, long providerContractVersionId, long accessChannelId,
             long endpointId, String targetName, String ownerCode, List<FieldMappingCommand> requestMappings,
             List<FieldMappingCommand> responseMappings, AuthenticationTemplate authentication) {}
+    public record BusinessProvisionTargetCommand(long providerContractId, long providerContractVersionId,
+            long accessChannelId, long transportVersionId, String targetName, String ownerCode,
+            List<FieldMappingCommand> requestMappings, List<FieldMappingCommand> responseMappings) {}
     public record ProvisionedTargetView(AdapterTargetView target, long bindingVersionId, int bindingVersionNo,
             BindingVersionLifecycleStatus lifecycleStatus, long accessChannelId, long endpointId,
             long requestMappingVersionId, long responseMappingVersionId, Long policyVersionId) {}

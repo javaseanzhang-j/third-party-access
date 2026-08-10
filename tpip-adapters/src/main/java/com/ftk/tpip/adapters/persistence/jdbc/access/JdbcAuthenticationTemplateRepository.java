@@ -51,6 +51,10 @@ public final class JdbcAuthenticationTemplateRepository implements Authenticatio
             return statement; }, keys);
         return findById(requiredKey(keys)).orElseThrow();
     }
+    @Override public Optional<AuthenticationTemplateVersion> findVersionById(long versionId) {
+        return jdbc.query("SELECT " + VERSION_COLUMNS + " FROM tpip_auth_template_version WHERE id=?",
+                VERSION_MAPPER, versionId).stream().findFirst();
+    }
     @Override public Optional<AuthenticationTemplateVersion> findVersionById(long templateId, long versionId) {
         return jdbc.query("SELECT " + VERSION_COLUMNS + " FROM tpip_auth_template_version WHERE auth_template_id=? AND id=?",
                 VERSION_MAPPER, templateId, versionId).stream().findFirst();

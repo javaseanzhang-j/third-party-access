@@ -10,6 +10,7 @@ public interface AuthenticationTemplateRepository {
     Optional<AuthenticationTemplate> findByCode(String code);
     List<AuthenticationTemplate> findAll(Long providerId);
     AuthenticationTemplate create(AuthenticationTemplate template, String actor);
+    Optional<AuthenticationTemplateVersion> findVersionById(long versionId);
     Optional<AuthenticationTemplateVersion> findVersionById(long templateId, long versionId);
     List<AuthenticationTemplateVersion> findVersions(long templateId);
     AuthenticationTemplateVersion createVersion(AuthenticationTemplateVersion version, String actor);

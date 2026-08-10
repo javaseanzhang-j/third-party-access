@@ -50,6 +50,18 @@ public class AccessServiceProductController {
         return ResponseEntity.created(URI.create("/control/v1/product-model/services/" + id + "/targets/"
                 + created.target().bindingId())).body(created);
     }
+    @PostMapping("/{id}/targets:provision-business")
+    public ResponseEntity<ProvisionedTargetView> provisionBusinessTarget(
+            @PathVariable @Min(1) long id, @Valid @RequestBody BusinessProvisionTargetRequest request,
+            @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
+        var created = service.provisionBusinessTarget(id, new BusinessProvisionTargetCommand(
+                request.providerContractId(), request.providerContractVersionId(), request.accessChannelId(),
+                request.transportVersionId(), request.targetName(), request.ownerCode(),
+                request.requestMappings().stream().map(FieldMappingRequest::command).toList(),
+                request.responseMappings().stream().map(FieldMappingRequest::command).toList()), actor);
+        return ResponseEntity.created(URI.create("/control/v1/product-model/services/" + id + "/targets/"
+                + created.target().bindingId())).body(created);
+    }
 
     public record CreateRequest(
             @NotBlank @Size(max=140) @Pattern(regexp="^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$") String serviceCode,
@@ -73,4 +85,10 @@ public class AccessServiceProductController {
             @NotEmpty @Size(max=500) List<@Valid FieldMappingRequest> requestMappings,
             @NotEmpty @Size(max=500) List<@Valid FieldMappingRequest> responseMappings,
             @Valid AuthenticationRequest authentication) {}
+    public record BusinessProvisionTargetRequest(@Positive long providerContractId,
+            @Positive long providerContractVersionId, @Positive long accessChannelId,
+            @Positive long transportVersionId, @NotBlank @Size(max=200) String targetName,
+            @NotBlank @Size(max=100) String ownerCode,
+            @NotEmpty @Size(max=500) List<@Valid FieldMappingRequest> requestMappings,
+            @NotEmpty @Size(max=500) List<@Valid FieldMappingRequest> responseMappings) {}
 }
