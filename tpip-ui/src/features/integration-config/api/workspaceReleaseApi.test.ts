@@ -26,7 +26,7 @@ describe('workspace release api', () => {
   it('compiles and publishes a bundle', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
-    await workspaceReleaseApi.compile(4, 'customer.lookup.local', '1.0.0', 5)
+    await workspaceReleaseApi.compile(4, 'customer.lookup.local', 5)
     await workspaceReleaseApi.publish(9)
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/control/v1/workspaces/4/bundles')
     expect(fetchMock.mock.calls[1]?.[0]).toBe('/control/v1/bundles/9:publish')

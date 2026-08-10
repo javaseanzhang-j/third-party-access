@@ -7,7 +7,7 @@ import java.util.Set;
 public record PolicyPlanLayer(String layerCode, CompiledPolicyPlan plan, Set<String> disabledStepIds) {
     public PolicyPlanLayer {
         layerCode = Objects.requireNonNull(layerCode, "layerCode must not be null");
-        plan = Objects.requireNonNull(plan, "plan must not be null");
         disabledStepIds = disabledStepIds == null ? Set.of() : Set.copyOf(disabledStepIds);
+        if (plan == null && disabledStepIds.isEmpty()) throw new IllegalArgumentException("policy layer must change the effective plan");
     }
 }

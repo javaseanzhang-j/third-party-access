@@ -10,11 +10,11 @@ const health = useQuery({
   refetchInterval: 15_000
 })
 const state = computed(() => {
-  if (health.isPending.value) return { tone: 'checking', label: 'CHECKING', hint: '正在检查 Control Plane' }
+  if (health.isPending.value) return { tone: 'checking', label: '检查中', hint: '正在检查控制服务' }
   if (health.isSuccess.value && health.data.value?.status === 'UP') {
-    return { tone: 'online', label: 'ONLINE', hint: 'Control Plane 正常' }
+    return { tone: 'online', label: '正常', hint: '控制服务正常' }
   }
-  return { tone: 'offline', label: 'OFFLINE', hint: 'Control Plane 不可用，点击重试' }
+  return { tone: 'offline', label: '离线', hint: '控制服务不可用，点击重试' }
 })
 </script>
 
@@ -27,6 +27,6 @@ const state = computed(() => {
     :aria-label="state.hint"
     @click="health.refetch()"
   >
-    <span /> CONTROL {{ state.label }}
+    <span /> 控制服务 {{ state.label }}
   </button>
 </template>

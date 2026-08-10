@@ -17,13 +17,17 @@
 
 ```text
 第三方系统
-  └── 接入通道
+  └── 产品/服务
+        ├── 接入通道
         └── 第三方接口
 ```
 
 - **第三方系统**：外部能力提供者，例如阿里云、腾讯云或本地会员中心。
+- **产品/服务**：提供方内的能力分组，例如短信服务、OSS 对象存储、人脸识别。它是界面筛选和资产归属边界，不是业务调用编码。
 - **接入通道**：当前平台连接第三方的一组 URL、账号、凭据、公共参数和公共规则。同一个第三方可以有多个 URL 不同的通道。
 - **第三方接口**：通道下一个具体的 HTTP 接口，保存 Method、Path、原生请求和响应结构以及接口差异。
+
+一个通道和一个第三方接口在当前版本中只能归属一个产品/服务。因此选中“阿里云 → 短信服务”后，界面不会出现阿里云 OSS，也不会出现腾讯云短信。
 
 通道地址与接口地址的关系为：
 
@@ -341,3 +345,30 @@ GET  /control/v1/product-model/route-decisions?serviceCode=&requestId=
 第八阶段完成了标准 HMAC Provider 和组合算法底座。当前通道/接口 Policy 仍缺少独立的版本化挂载资产，Bundle 目前仍使用
 BindingVersion 选择的实现级 Policy。下一阶段需要增加 Scope 为 `CHANNEL/INTERFACE/IMPLEMENTATION` 的不可变 Policy
 挂载版本、产品化配置 UI，并在 Bundle 编译时调用组合器冻结最终有效计划。
+
+### v0.23 第九阶段
+
+- V45 新增 `tpip_access_policy_version`，以“接入通道 + 作用范围 + 接口”为稳定身份保存不可变策略版本；
+- `CHANNEL` 版本代表通道公共规则，不能指定接口；`INTERFACE` 版本必须指定已经加入该通道的第三方接口；现有 BindingVersion
+  选择的 IntegrationPolicy 继续代表具体实现专用规则，不迁移、不破坏历史资产；
+- 每次配置创建新的 DRAFT，创建时立即使用注册表编译 Policy DSL；发布时再次编译，PUBLISHED 版本禁止原地修改；同一范围允许
+  连续发布多个版本，后续 Bundle 只选择版本号最大的已发布版本；
+- 接口层可以用相同 step id 覆盖通道规则，也可以通过 `disabledStepIds` 显式移除上层规则；支持只有禁用项、没有新增 DSL 的版本；
+- Bundle 编译顺序固定为 `CHANNEL → INTERFACE → IMPLEMENTATION`。后层同名 step 替换前层，禁用先于该层新增规则执行；组合后的
+  `CompiledPolicyPlan` 生成稳定 checksum，并作为最终执行计划冻结，Runtime 不查询 V45 设计表；
+- Bundle Secret 声明从最终有效组合计划收集。已被覆盖或禁用的认证规则不会把无效 Secret Reference 带进 Bundle；
+- Endpoint 执行快照增加 `policyComposition` 证据，记录每一层的作用范围、版本 ID、版本号、内容 checksum 和最终有效 checksum，
+  可以从 Bundle 反查某次发布实际采用了哪些通道、接口和实现规则；
+- 产品 UI 在“接入通道 → 公共规则与接口覆盖”提供模板化配置：请求追踪 Header、API Key、HMAC-SHA256，以及接口禁用列表；
+- 普通配置人员不需要编写 Groovy，也不需要直接操作 Policy Type Registry。高级 Policy DSL 页面继续保留给实现级复杂规则。
+
+第九阶段完成了三层 Policy 的配置、发布、组合和 Bundle 冻结闭环。策略发布不会改变已经发布或激活的 Bundle；必须重新执行
+Workspace 验证、Bundle 编译和 Deployment 发布，新的有效策略才会进入 Runtime。
+
+### 产品模型与交互整改
+
+- V46 在 Provider 与通道/接口之间新增“产品/服务”归属层，表达阿里云短信、阿里云 OSS 等提供方内部产品边界；
+- 旧数据升级时按提供方归入“未分类服务”，不根据 URL 猜测业务语义；新数据必须明确选择产品/服务；
+- 普通配置页面固定使用“提供方 → 产品/服务 → 通道/接口”级联选择，后端同时校验归属，不依赖前端过滤保证正确性；
+- 第三方报文结构版本、业务标准报文版本和发布包版本不再由用户输入。新建时由平台从 `1.0.0` 开始，后续默认自动递增修订号；
+- 中文界面优先展示业务名称和业务动作。`serviceCode`、JSONPath、Policy DSL 等执行标识仅在必要的高级配置或详情中保留。

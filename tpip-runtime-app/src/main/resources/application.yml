@@ -14,7 +14,7 @@ server:
 
 tpip:
   runtime:
-    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18080}
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18082}
     environment-code: ${TPIP_RUNTIME_ENVIRONMENT:test}
     runtime-version: ${TPIP_RUNTIME_VERSION:0.2.0}
     instance-id: ${TPIP_RUNTIME_INSTANCE_ID:runtime-local-1}

@@ -8,7 +8,7 @@ export interface ProviderContractVersionAsset {
   lifecycleStatus: ProviderContractVersionStatus; publishedAt: string | null; createdAt: string
 }
 export interface CreateProviderContractVersionInput {
-  semanticVersion: string; requestSchema: unknown | null; responseSchema: unknown | null
+  requestSchema: unknown | null; responseSchema: unknown | null
   errorSchema: unknown | null; callbackSchema: unknown | null; examples: unknown | null
 }
 const operator = (import.meta.env.VITE_TPIP_OPERATOR as string | undefined)?.trim() || 'local-ui'

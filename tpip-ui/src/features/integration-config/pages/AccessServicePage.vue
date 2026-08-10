@@ -16,6 +16,7 @@ const providersQuery = useQuery({ queryKey: ['providers'], queryFn: ({ signal })
 const endpointsQuery = useQuery({ queryKey: ['product-endpoints'], queryFn: ({ signal }) => integrationAssetApi.endpoints(undefined, signal) })
 const credentialsQuery = useQuery({ queryKey: ['product-credentials'], queryFn: ({ signal }) => integrationAssetApi.credentials(undefined, signal) })
 const channelsQuery = useQuery({ queryKey: ['product-channels'], queryFn: ({ signal }) => accessChannelApi.channels(undefined, signal) })
+const productsQuery = useQuery({ queryKey: ['provider-products'], queryFn: ({ signal }) => accessChannelApi.products(undefined, signal) })
 const services = computed(() => servicesQuery.data.value ?? [])
 const createDialog = ref(false)
 const detailService = ref<ProductAccessService | null>(null)
@@ -32,7 +33,8 @@ const form = reactive({ serviceCode: '', serviceName: '', description: '', invoc
   idempotencyClass: 'UNKNOWN' as 'UNKNOWN' | 'IDEMPOTENT' | 'IDEMPOTENT_WITH_KEY' | 'NON_IDEMPOTENT',
   dataClassification: 'INTERNAL' as 'INTERNAL' | 'PUBLIC' | 'CONFIDENTIAL' | 'RESTRICTED', ownerCode: 'local',
   requestSchemaText: defaultSchema, requestExampleText: '{}', responseSchemaText: defaultSchema, responseExampleText: '{}' })
-const targetForm = reactive({ providerContractId: undefined as number | undefined, providerContractVersionId: undefined as number | undefined,
+const targetForm = reactive({ providerId: undefined as number | undefined, providerProductId: undefined as number | undefined,
+  providerContractId: undefined as number | undefined, providerContractVersionId: undefined as number | undefined,
   accessChannelId: undefined as number | undefined, endpointId: undefined as number | undefined, targetName: '', ownerCode: 'local',
   requestMappingsText: '$.mobile -> $.phone STRING required', responseMappingsText: '$.success -> $.success BOOLEAN required',
   authenticationMode: 'CHANNEL_PARAMETERS' as 'CHANNEL_PARAMETERS' | 'API_KEY_POLICY' | 'HMAC_SHA256_POLICY', credentialRefId: undefined as number | undefined,
@@ -40,9 +42,15 @@ const targetForm = reactive({ providerContractId: undefined as number | undefine
   encoding: 'HEX_LOWER' as 'HEX_LOWER' | 'BASE64' })
 const channelInterfaces = ref<Record<number, number[]>>({})
 const providerVersions = ref<ProviderContractVersionAsset[]>([])
+const productInterfaceIds = ref<number[]>([])
+const eligibleProducts = computed(() => (productsQuery.data.value ?? []).filter(item =>
+  item.providerId === targetForm.providerId && item.status === 'ACTIVE'))
+const eligibleInterfaces = computed(() => (interfacesQuery.data.value?.items ?? []).filter(item =>
+  item.status === 'ACTIVE' && item.providerId === targetForm.providerId && productInterfaceIds.value.includes(item.id)))
 const selectedInterface = computed(() => interfacesQuery.data.value?.items.find(item => item.id === targetForm.providerContractId) ?? null)
 const eligibleChannels = computed(() => (channelsQuery.data.value ?? []).filter(item => item.status === 'ACTIVE'
   && item.providerId === selectedInterface.value?.providerId
+  && item.providerProductId === targetForm.providerProductId
   && (channelInterfaces.value[item.id] ?? []).includes(targetForm.providerContractId ?? 0)))
 const selectedChannel = computed(() => eligibleChannels.value.find(item => item.id === targetForm.accessChannelId) ?? null)
 const eligibleEndpoints = computed(() => (endpointsQuery.data.value?.items ?? []).filter(item => item.lifecycleStatus === 'PUBLISHED'
@@ -55,18 +63,30 @@ function parseJson(text: string, label: string, optional = false): unknown {
   try { return JSON.parse(text) } catch { throw new Error(`${label}不是合法 JSON`) }
 }
 function providerName(providerId: number): string {
-  return providersQuery.data.value?.items.find(item => item.id === providerId)?.providerName ?? `Provider #${providerId}`
+  return providersQuery.data.value?.items.find(item => item.id === providerId)?.providerName ?? `第三方 #${providerId}`
 }
 function openCreate(): void { errorMessage.value = ''; createDialog.value = true }
 function openDetail(service: unknown): void { detailService.value = service as ProductAccessService }
 async function openTarget(): Promise<void> {
-  errorMessage.value = ''; targetForm.providerContractId = undefined; targetForm.providerContractVersionId = undefined
+  errorMessage.value = ''; targetForm.providerId = undefined; targetForm.providerProductId = undefined
+  targetForm.providerContractId = undefined; targetForm.providerContractVersionId = undefined
   targetForm.accessChannelId = undefined; targetForm.endpointId = undefined; targetForm.targetName = ''; providerVersions.value = []
   targetDialog.value = true
   if (!channelsQuery.data.value) await channelsQuery.refetch()
   if (!endpointsQuery.data.value) await endpointsQuery.refetch()
   const channels = channelsQuery.data.value ?? []
   channelInterfaces.value = Object.fromEntries(await Promise.all(channels.map(async item => [item.id, await accessChannelApi.interfaceIds(item.id)])))
+}
+function selectTargetProvider(providerId: number): void {
+  targetForm.providerId = providerId; targetForm.providerProductId = undefined; targetForm.providerContractId = undefined
+  targetForm.providerContractVersionId = undefined; targetForm.accessChannelId = undefined
+  targetForm.endpointId = undefined; providerVersions.value = []; productInterfaceIds.value = []
+}
+async function selectTargetProduct(productId: number): Promise<void> {
+  targetForm.providerProductId = productId; targetForm.providerContractId = undefined
+  targetForm.providerContractVersionId = undefined; targetForm.accessChannelId = undefined
+  targetForm.endpointId = undefined; providerVersions.value = []
+  productInterfaceIds.value = await accessChannelApi.productInterfaceIds(productId)
 }
 async function selectTargetInterface(contractId: number): Promise<void> {
   targetForm.providerContractId = contractId; targetForm.providerContractVersionId = undefined
@@ -110,7 +130,7 @@ const addTarget = useMutation({
 function submitTarget(): void {
   errorMessage.value = ''
   if (!targetForm.providerContractId || !targetForm.providerContractVersionId || !targetForm.accessChannelId || !targetForm.endpointId
-    || !targetForm.targetName.trim() || !targetForm.ownerCode.trim()) { errorMessage.value = '请完成接口、通道、协议版本、执行地址和实现名称配置'; return }
+    || !targetForm.targetName.trim() || !targetForm.ownerCode.trim()) { errorMessage.value = '请完成接口、通道、报文结构版本、执行地址和实现名称配置'; return }
   if (targetForm.authenticationMode !== 'CHANNEL_PARAMETERS' && !targetForm.credentialRefId) { errorMessage.value = '认证规则必须选择凭据'; return }
   if (targetForm.authenticationMode === 'HMAC_SHA256_POLICY' && !targetForm.sourceTemplate.trim()) { errorMessage.value = 'HMAC 签名原文不能为空'; return }
   try { parseFieldMappingLines(targetForm.requestMappingsText); parseFieldMappingLines(targetForm.responseMappingsText); addTarget.mutate() }
@@ -154,8 +174,8 @@ const runDryRoute = useMutation({ mutationFn: () => {
 
 <template>
   <section>
-    <div class="product-page-heading"><div><span class="eyebrow">ACCESS SERVICES</span><h2>接入服务</h2><p>业务系统只需要记住 serviceCode；标准请求、标准返回和多个第三方实现都在一个服务中管理。</p></div><el-button type="primary" @click="openCreate">＋ 新增接入服务</el-button></div>
-    <el-alert type="info" :closable="false" show-icon class="command-notice" title="创建服务时会自动建立并发布 1.0.0 标准请求/返回契约，Domain 与 Capability 由平台内部维护。" />
+    <div class="product-page-heading"><div><span class="eyebrow">接入服务</span><h2>接入服务</h2><p>业务系统只需要记住服务编码；标准请求、标准返回和多个第三方实现都在一个服务中管理。</p></div><el-button type="primary" @click="openCreate">＋ 新增接入服务</el-button></div>
+    <el-alert type="info" :closable="false" show-icon class="command-notice" title="创建服务时会自动建立并发布首个标准请求、返回契约；技术目录由平台内部维护。" />
     <el-alert v-if="servicesQuery.isError.value" type="error" :closable="false" show-icon class="command-notice" title="接入服务读取失败，请确认 Control Plane 已启动。" />
     <div v-loading="servicesQuery.isPending.value" class="surface product-table-card">
       <el-empty v-if="!servicesQuery.isPending.value && !services.length" description="还没有可供业务系统调用的服务"><el-button type="primary" @click="openCreate">＋ 定义第一个服务</el-button></el-empty>
@@ -172,12 +192,14 @@ const runDryRoute = useMutation({ mutationFn: () => {
     <el-drawer :model-value="detailService !== null" size="780px" title="接入服务详情" @close="detailService = null"><template v-if="detailService"><div class="product-detail-title"><span>业务调用编码</span><strong class="mono">{{ detailService.serviceCode }}</strong><p>{{ detailService.serviceName }} · {{ detailService.description || '暂无说明' }}</p></div><div class="drawer-section"><h3>业务标准报文</h3><el-table :data="detailService.contracts" size="small"><el-table-column label="方向"><template #default="{ row }">{{ row.kind === 'REQUEST' ? '业务请求' : '业务返回' }}</template></el-table-column><el-table-column prop="contractName" label="名称" /><el-table-column label="版本"><template #default="{ row }"><el-tag type="success">{{ row.semanticVersion }} · {{ row.lifecycleStatus }}</el-tag></template></el-table-column></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>第三方实现</strong><span>同一个 serviceCode 可以绑定多家厂商接口。</span></div><el-button type="primary" @click="openTarget">＋ 添加第三方实现</el-button></div><el-empty v-if="!detailService.targets.length" description="尚未添加第三方实现" /><el-table v-else :data="detailService.targets" size="small"><el-table-column prop="targetName" label="实现名称" /><el-table-column prop="providerName" label="提供方" /><el-table-column prop="interfaceName" label="第三方接口" /><el-table-column prop="status" label="状态" width="90" /></el-table></div><div class="drawer-section"><div class="asset-toolbar"><div><strong>多目标路由</strong><span>先匹配条件和健康状态，再选最小优先级组，最后按权重选择。</span></div><el-button type="primary" :disabled="!detailService.targets.length" @click="openRoute">配置路由</el-button></div></div></template></el-drawer>
 
     <el-dialog v-model="targetDialog" class="target-provision-dialog" title="添加可执行的第三方实现" width="980px" :close-on-click-modal="false">
-      <el-alert type="success" :closable="false" show-icon title="完成一次提交后，平台会自动创建并发布请求映射、返回映射和 BindingVersion，不需要再进入高级管理逐项拼装。" />
+      <el-alert type="success" :closable="false" show-icon title="完成一次提交后，平台会自动创建并发布请求映射、返回映射和可执行配置版本，不需要再进入高级管理逐项拼装。" />
       <el-form class="dialog-form" label-position="top">
         <h3>1. 选择第三方接口与通道</h3>
         <div class="form-two-columns">
-          <el-form-item label="第三方接口" required><el-select v-model="targetForm.providerContractId" filterable style="width:100%" placeholder="提供方 / 接口名称" @change="selectTargetInterface"><el-option v-for="item in interfacesQuery.data.value?.items ?? []" :key="item.id" :value="item.id" :label="`${providerName(item.providerId)} / ${item.contractName}`" /></el-select></el-form-item>
-          <el-form-item label="已发布报文协议" required><el-select v-model="targetForm.providerContractVersionId" style="width:100%" placeholder="选择协议版本"><el-option v-for="item in providerVersions" :key="item.id" :value="item.id" :label="`${item.semanticVersion} · v${item.versionNo}`" /></el-select></el-form-item>
+          <el-form-item label="第三方提供方" required><el-select v-model="targetForm.providerId" filterable style="width:100%" placeholder="先选择提供方" @change="selectTargetProvider"><el-option v-for="item in providersQuery.data.value?.items ?? []" :key="item.id" :value="item.id" :label="item.providerName" /></el-select></el-form-item>
+          <el-form-item label="产品/服务" required><el-select v-model="targetForm.providerProductId" filterable :disabled="!targetForm.providerId" style="width:100%" placeholder="例如：短信服务" @change="selectTargetProduct"><el-option v-for="item in eligibleProducts" :key="item.id" :value="item.id" :label="item.productName" /></el-select></el-form-item>
+          <el-form-item label="第三方接口" required><el-select v-model="targetForm.providerContractId" filterable :disabled="!targetForm.providerProductId" style="width:100%" placeholder="只显示当前产品服务的接口" @change="selectTargetInterface"><el-option v-for="item in eligibleInterfaces" :key="item.id" :value="item.id" :label="item.contractName" /></el-select></el-form-item>
+          <el-form-item label="报文结构版本" required><el-select v-model="targetForm.providerContractVersionId" style="width:100%" placeholder="选择已发布版本"><el-option v-for="item in providerVersions" :key="item.id" :value="item.id" :label="`${item.semanticVersion} · 内部修订 ${item.versionNo}`" /></el-select><small class="form-hint">定义该接口请求、返回、错误和回调报文的字段结构。</small></el-form-item>
           <el-form-item label="接入通道" required><el-select v-model="targetForm.accessChannelId" style="width:100%" placeholder="选择已关联该接口的通道" @change="selectChannel"><el-option v-for="item in eligibleChannels" :key="item.id" :value="item.id" :label="`${item.channelName} · ${item.baseUrl}`" /></el-select><small class="form-hint">通道中的 appKey、appSecret 等公共参数会自动继承，接口参数可以覆盖。</small></el-form-item>
           <el-form-item label="实际调用地址" required><el-select v-model="targetForm.endpointId" style="width:100%" placeholder="选择与通道 URL 一致的地址"><el-option v-for="item in eligibleEndpoints" :key="item.id" :value="item.id" :label="`${item.httpMethod} ${item.baseUrl}${item.resourcePath}`" /></el-select></el-form-item>
         </div>

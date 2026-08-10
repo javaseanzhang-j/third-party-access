@@ -2,6 +2,7 @@ package com.ftk.tpip.control.configuration;
 
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcCredentialRefRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAccessChannelRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcProviderProductRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCanonicalOperationRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCatalogHierarchyRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.catalog.JdbcCanonicalContractRepository;
@@ -47,6 +48,7 @@ import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcProviderEndpointRepos
 import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcEndpointProbeRepository;
 import com.ftk.tpip.provider.domain.repository.CredentialRefRepository;
 import com.ftk.tpip.access.domain.repository.AccessChannelRepository;
+import com.ftk.tpip.access.domain.repository.ProviderProductRepository;
 import com.ftk.tpip.catalog.domain.repository.CanonicalOperationRepository;
 import com.ftk.tpip.catalog.domain.repository.CatalogHierarchyRepository;
 import com.ftk.tpip.catalog.domain.repository.CanonicalContractRepository;
@@ -113,8 +115,13 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 public class PersistenceConfiguration {
 
     @Bean
-    AccessChannelRepository accessChannelRepository(JdbcTemplate jdbcTemplate) {
-        return new JdbcAccessChannelRepository(jdbcTemplate);
+    AccessChannelRepository accessChannelRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        return new JdbcAccessChannelRepository(jdbcTemplate, objectMapper);
+    }
+
+    @Bean
+    ProviderProductRepository providerProductRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcProviderProductRepository(jdbcTemplate);
     }
 
     @Bean

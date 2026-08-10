@@ -49,7 +49,7 @@ export const router = createRouter({
     {
       path: '/integration-assets/provider-contract-versions',
       name: 'provider-contract-versions',
-      meta: { title: '第三方协议版本' },
+      meta: { title: '第三方报文结构' },
       component: () => import('@/features/integration-config/pages/ProviderContractVersionPage.vue')
     },
     {
@@ -61,43 +61,43 @@ export const router = createRouter({
     {
       path: '/integration-assets/policies',
       name: 'policy-configuration',
-      meta: { title: 'Policy DSL' },
+      meta: { title: '执行规则' },
       component: () => import('@/features/integration-config/pages/PolicyConfigurationPage.vue')
     },
     {
       path: '/integration-assets/binding-versions',
       name: 'binding-versions',
-      meta: { title: 'BindingVersion 执行闭包' },
+      meta: { title: '可执行配置版本' },
       component: () => import('@/features/integration-config/pages/BindingVersionPage.vue')
     },
     {
       path: '/integration-assets/fixture-suites',
       name: 'fixture-suites',
-      meta: { title: 'FixtureSuite 验证资产' },
+      meta: { title: '验证用例集' },
       component: () => import('@/features/integration-config/pages/FixtureSuitePage.vue')
     },
     {
       path: '/integration-assets/workspaces',
       name: 'integration-workspaces',
-      meta: { title: 'Workspace 配置与验证' },
+      meta: { title: '配置验证空间' },
       component: () => import('@/features/integration-config/pages/WorkspaceVerificationPage.vue')
     },
     {
       path: '/integration-assets/releases',
       name: 'integration-releases',
-      meta: { title: 'Workspace 评审与 Bundle 发布' },
+      meta: { title: '评审与发布包' },
       component: () => import('@/features/integration-config/pages/WorkspaceReleasePage.vue')
     },
     {
       path: '/integration-assets/deployments',
       name: 'integration-deployments',
-      meta: { title: 'Deployment 激活与回滚' },
+      meta: { title: '运行版本激活与回滚' },
       component: () => import('@/features/integration-config/pages/DeploymentPage.vue')
     },
     {
       path: '/integration-assets/runtime-invoke',
       name: 'runtime-invoke',
-      meta: { title: 'Runtime 调用控制台' },
+      meta: { title: '业务调用验证' },
       component: () => import('@/features/integration-config/pages/RuntimeInvokePage.vue')
     },
     {

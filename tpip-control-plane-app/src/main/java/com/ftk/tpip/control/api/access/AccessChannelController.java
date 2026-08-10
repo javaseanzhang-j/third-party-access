@@ -10,6 +10,8 @@ import com.ftk.tpip.access.domain.model.AccessParameterOverrideMode;
 import com.ftk.tpip.access.domain.model.AccessParameterScope;
 import com.ftk.tpip.access.domain.model.AccessParameterSource;
 import com.ftk.tpip.access.domain.model.EffectiveAccessParameter;
+import com.ftk.tpip.access.domain.model.AccessPolicyLifecycleStatus;
+import com.ftk.tpip.access.domain.model.AccessPolicyVersion;
 import com.ftk.tpip.control.application.access.AccessChannelApplicationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -19,6 +21,8 @@ import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,26 +44,26 @@ public class AccessChannelController {
 
     @GetMapping
     public List<ChannelResponse> list(@RequestParam(required = false) Long providerId) {
-        return service.findAll(providerId).stream().map(ChannelResponse::from).toList();
+        return service.findAll(providerId).stream().map(this::response).toList();
     }
 
     @GetMapping("/{channelId}")
-    public ChannelResponse get(@PathVariable @Min(1) long channelId) { return ChannelResponse.from(service.get(channelId)); }
+    public ChannelResponse get(@PathVariable @Min(1) long channelId) { return response(service.get(channelId)); }
 
     @PostMapping
     public ResponseEntity<ChannelResponse> create(@Valid @RequestBody CreateChannelRequest request,
             @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
-        AccessChannel channel = service.create(request.providerId(), request.channelCode(), request.channelName(),
+        AccessChannel channel = service.create(request.providerId(), request.providerProductId(), request.channelCode(), request.channelName(),
                 request.baseUrl(), request.credentialRefId(), request.description(), actor);
         return ResponseEntity.created(URI.create("/control/v1/product-model/channels/" + channel.id()))
-                .body(ChannelResponse.from(channel));
+                .body(response(channel));
     }
 
     @PutMapping("/{channelId}")
     public ChannelResponse update(@PathVariable @Min(1) long channelId,
             @Valid @RequestBody UpdateChannelRequest request,
             @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
-        return ChannelResponse.from(service.update(channelId, request.channelName(), request.baseUrl(),
+        return response(service.update(channelId, request.channelName(), request.baseUrl(),
                 request.credentialRefId(), request.description(), request.status(), request.rowVersion(), actor));
     }
 
@@ -95,7 +99,32 @@ public class AccessChannelController {
                 .map(EffectiveParameterResponse::from).toList();
     }
 
-    public record CreateChannelRequest(@Min(1) long providerId, @NotBlank @Size(max=180) String channelCode,
+    @GetMapping("/{channelId}/policy-versions")
+    public List<PolicyVersionResponse> policyVersions(@PathVariable @Min(1) long channelId,
+            @RequestParam @NotNull AccessParameterScope scope,
+            @RequestParam(required = false) Long providerContractId) {
+        return service.policyVersions(channelId, scope, providerContractId).stream()
+                .map(PolicyVersionResponse::from).toList();
+    }
+
+    @PostMapping("/{channelId}/policy-versions")
+    public ResponseEntity<PolicyVersionResponse> createPolicyVersion(@PathVariable @Min(1) long channelId,
+            @Valid @RequestBody CreatePolicyVersionRequest request,
+            @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
+        AccessPolicyVersion created = service.createPolicyVersion(channelId, request.scope(),
+                request.providerContractId(), request.policyName(), request.document(), request.disabledStepIds(), actor);
+        return ResponseEntity.created(URI.create("/control/v1/product-model/channels/" + channelId
+                + "/policy-versions/" + created.id())).body(PolicyVersionResponse.from(created));
+    }
+
+    @PostMapping("/{channelId}/policy-versions/{versionId}:publish")
+    public PolicyVersionResponse publishPolicyVersion(@PathVariable @Min(1) long channelId,
+            @PathVariable @Min(1) long versionId,
+            @RequestHeader("X-Operator") @NotBlank @Size(max=100) String actor) {
+        return PolicyVersionResponse.from(service.publishPolicyVersion(channelId, versionId, actor));
+    }
+
+    public record CreateChannelRequest(@Min(1) long providerId, @Min(1) long providerProductId, @NotBlank @Size(max=180) String channelCode,
             @NotBlank @Size(max=200) String channelName, @NotBlank @Size(max=500) String baseUrl,
             Long credentialRefId, @Size(max=1000) String description) {}
     public record UpdateChannelRequest(@NotBlank @Size(max=200) String channelName,
@@ -107,13 +136,17 @@ public class AccessChannelController {
             @NotNull AccessParameterDataType dataType, JsonNode value, @Size(max=500) String sourceSelector,
             Long secretRefId, @NotNull AccessParameterOverrideMode overrideMode, boolean required,
             boolean sensitive, boolean callerOverridable, @Size(max=1000) String description) {}
-    public record ChannelResponse(long id, long providerId, String channelCode, String channelName, String baseUrl,
+    public record CreatePolicyVersionRequest(@NotNull AccessParameterScope scope, Long providerContractId,
+            @NotBlank @Size(max=200) String policyName, JsonNode document,
+            @Size(max=100) Set<@Pattern(regexp="^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$") String> disabledStepIds) {}
+    public record ChannelResponse(long id, long providerId, long providerProductId, String channelCode, String channelName, String baseUrl,
             Long credentialRefId, String description, AccessChannelStatus status, long rowVersion,
             Instant createdAt, Instant updatedAt) {
-        static ChannelResponse from(AccessChannel value) { return new ChannelResponse(value.id(), value.providerId(),
+        static ChannelResponse from(AccessChannel value, long productId) { return new ChannelResponse(value.id(), value.providerId(), productId,
                 value.channelCode().value(), value.channelName(), value.baseUrl(), value.credentialRefId(),
                 value.description(), value.status(), value.rowVersion(), value.createdAt(), value.updatedAt()); }
     }
+    private ChannelResponse response(AccessChannel value) { return ChannelResponse.from(value, service.productId(value.id())); }
     public record ParameterResponse(long id, AccessParameterScope scope, Long providerContractId,
             String parameterCode, String parameterName, AccessParameterLocation location,
             AccessParameterSource source, AccessParameterDataType dataType, String valueDocument,
@@ -128,6 +161,17 @@ public class AccessChannelController {
     public record EffectiveParameterResponse(ParameterResponse parameter, AccessParameterScope resolvedFrom) {
         static EffectiveParameterResponse from(EffectiveAccessParameter value) {
             return new EffectiveParameterResponse(ParameterResponse.from(value.parameter()), value.resolvedFrom());
+        }
+    }
+    public record PolicyVersionResponse(long id, long channelId, AccessParameterScope scope,
+            Long providerContractId, String policyCode, String policyName, int versionNo,
+            String normalizedDocument, Set<String> disabledStepIds, String compilerVersion,
+            String contentChecksum, AccessPolicyLifecycleStatus lifecycleStatus, Instant publishedAt, Instant createdAt) {
+        static PolicyVersionResponse from(AccessPolicyVersion value) {
+            return new PolicyVersionResponse(value.id(), value.channelId(), value.scope(), value.providerContractId(),
+                    value.policyCode().value(), value.policyName(), value.versionNo(), value.normalizedDocument(),
+                    value.disabledStepIds(), value.compilerVersion(), value.contentChecksum(), value.lifecycleStatus(),
+                    value.publishedAt(), value.createdAt());
         }
     }
 }

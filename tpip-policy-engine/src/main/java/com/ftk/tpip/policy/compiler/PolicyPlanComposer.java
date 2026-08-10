@@ -40,17 +40,16 @@ public final class PolicyPlanComposer {
             if (!CODE.matcher(layer.layerCode()).matches()) throw new IllegalArgumentException("layerCode is invalid: " + layer.layerCode());
             if (!layerCodes.add(layer.layerCode())) throw new IllegalArgumentException("Duplicate layerCode: " + layer.layerCode());
             layer.disabledStepIds().forEach(stepId -> remove(effective, stepId));
-            layer.plan().stages().forEach((stage, steps) -> steps.forEach(step -> {
-                remove(effective, step.stepId());
-                effective.computeIfAbsent(stage, ignored -> new LinkedHashMap<>()).put(step.stepId(), step);
-            }));
+            if (layer.plan() != null) layer.plan().stages().forEach((stage, steps) -> steps.forEach(step -> {
+                    remove(effective, step.stepId());
+                    effective.computeIfAbsent(stage, ignored -> new LinkedHashMap<>()).put(step.stepId(), step);
+                }));
         }
 
         Map<PolicyStage, List<CompiledPolicyStep>> stages = new EnumMap<>(PolicyStage.class);
         effective.forEach((stage, steps) -> {
             if (!steps.isEmpty()) stages.put(stage, List.copyOf(steps.values()));
         });
-        if (stages.isEmpty()) throw new IllegalArgumentException("Policy composition produced no executable steps");
         return new CompiledPolicyPlan(policyCode, version, stages, checksum(policyCode, version, layers, stages));
     }
 

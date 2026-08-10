@@ -1,6 +1,6 @@
 # TPIP 平台功能说明与使用手册
 
-> 适用版本：当前本地工程基线（Java `0.1.0-SNAPSHOT`、UI `0.1.0`、Flyway `V43`、Runtime `0.2.0`）  
+> 适用版本：当前本地工程基线（Java `0.1.0-SNAPSHOT`、UI `0.1.0`、Flyway `V46`、Runtime `0.2.0`）
 > 使用范围：本地单机、单用户研发和架构验证环境
 
 ## 1. 平台定位
@@ -49,6 +49,19 @@ flowchart LR
 - Provider、CredentialRef、ProviderContract 与版本；
 - Endpoint 不可变修订、环境隔离、探测历史；
 - Binding、请求/响应 Mapping、Policy DSL 与冻结 BindingVersion。
+
+面向配置人员的产品层级为：
+
+```text
+提供方（阿里云）
+  └── 产品/服务（短信服务）
+        ├── 接入通道（国内短信生产通道）
+        └── 第三方接口（发送短信）
+```
+
+一个提供方可以有短信、对象存储、人脸识别等多个产品。选择产品后，界面只显示该产品下的通道和接口；后端也会拒绝跨提供方或跨产品组合。
+
+平台对不可变资产自动管理版本号。第三方协议、业务标准报文和发布包的首个版本为 `1.0.0`，后续新建默认自动增加修订号。用户只说明变更内容，不手工输入版本号。
 
 ### 3.2 Mapping
 
@@ -206,7 +219,7 @@ REMOTE_CALL Fixture 的 Control Plane 白名单和 Secret 环境变量要求见
 | --- | --- |
 | `/integration-assets` | 产品化接入总览和推荐配置路径（默认首页） |
 | `/integration-assets/provider-access` | 第三方系统以及现有技术资产配置入口 |
-| `/integration-assets/channels` | 按第三方、baseUrl 和凭据聚合的接入通道视图 |
+| `/integration-assets/channels` | 按“第三方 → 产品/服务”筛选通道，管理 baseUrl、凭据、公共参数和公共规则 |
 | `/integration-assets/interfaces` | 按第三方名称、接口名称、Method 和完整地址展示的第三方接口视图 |
 | `/integration-assets/services` | 创建 serviceCode、标准请求/返回、第三方实现，并配置版本化多目标路由和 Dry Run |
 | `/integration-assets/wizard` | 测试与发布进度、缺口定位、专家页面跳转和本地断点恢复 |
@@ -247,15 +260,26 @@ API 契约见 `docs/tpip-product-model-and-ui-redesign-v0.23.md`。
 UUID 或 Secret 引用装配到 Header、Query、Path、Body、Cookie 或签名输入中。Secret 原文不会进入设计库或 Bundle；表达式逻辑
 必须使用 Policy DSL，不能提交任意 Groovy。旧 BindingVersion 没有关联通道时仍按原有方式执行。
 
-“服务管理 → 接入服务 → 查看与管理 → 添加第三方实现”现在提供完整执行向导。依次选择第三方接口、已发布报文协议、
+“服务管理 → 接入服务 → 查看与管理 → 添加第三方实现”现在提供完整执行向导。依次选择第三方接口、已发布报文结构版本、
 接入通道和实际调用地址，然后按 `$.来源字段 -> $.目标字段 [类型] [required]` 填写请求与返回字段映射。认证可以直接
 继承通道公共参数，也可以选择 API Key 或 HMAC-SHA256 模板。HMAC 模板需要选择 Secret 凭据，并填写签名 Header、签名
 原文模板、十六进制/Base64 编码和可选前缀；密钥原文不会进入配置或 Bundle。点击“校验、生成并发布实现”后，平台在同一
 事务中生成双向 Mapping、可选 Policy 和已发布 BindingVersion；失败时不会留下半套资产。RSA 和 OAuth2 模板尚未进入本版本。
 
 若 HMAC 原文需要时间戳，可以先在接入通道新增公共参数：编码 `timestamp`、位置 `SIGNATURE`、来源 `SYSTEM_TIME`，然后在
-签名原文中引用 `${context.attributes.signature_timestamp}`。通道与接口 Policy 的继承组合算法已经具备，但版本化挂载入口尚未
-开放；当前向导创建的是该第三方实现专用 Policy。
+签名原文中引用 `${context.attributes.signature_timestamp}`。当前向导创建的是该第三方实现专用 Policy。
+
+通道与接口公共规则在“接入配置 → 接入通道”中维护：
+
+1. 选择一个通道，在“公共规则与接口覆盖”选择“通道公共规则”；
+2. 点击“新增规则版本”，勾选请求追踪号，或选择 API Key/HMAC-SHA256 并选择 Secret 凭据；
+3. 点击“编译并创建草稿”，确认后点击“发布”；
+4. 如果某个接口不同，切换到“接口覆盖规则”并选择接口；使用相同认证规则编码会覆盖通道认证，也可以填写
+   `request-trace`、`authentication` 等上层规则编码将其禁用；
+5. 重新执行 Workspace 验证、Bundle 编译和 Deployment 发布。仅发布策略版本不会修改线上或当前本地激活 Bundle。
+
+最终顺序固定为“通道公共规则 → 接口覆盖规则 → 具体实现规则”。具体实现规则优先级最高；最终组合结果和 checksum 会冻结进
+Bundle，Runtime 不读取策略配置表。
 
 ## 9. 常用操作流程
 

@@ -26,7 +26,7 @@ describe('canonical asset api', () => {
       status: 200, headers: { 'Content-Type': 'application/json' }
     }))
     vi.stubGlobal('fetch', fetchMock)
-    const input = { semanticVersion: '1.0.0', schemaStandard: 'JSON_SCHEMA_2020_12' as const,
+    const input = { schemaStandard: 'JSON_SCHEMA_2020_12' as const,
       schemaDocument: { type: 'object' }, exampleDocument: {}, compatibilityMode: 'BACKWARD' as const }
     await canonicalAssetApi.createVersion(3, input)
     await canonicalAssetApi.publishVersion(3, 5)

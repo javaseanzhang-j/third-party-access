@@ -89,7 +89,6 @@ public class ProviderContractController {
             @RequestHeader("X-Operator") @NotBlank @Size(max = 100) String actor) {
         var version = contractService.createVersion(
                 contractId,
-                request.semanticVersion(),
                 request.requestSchema(),
                 request.responseSchema(),
                 request.errorSchema(),

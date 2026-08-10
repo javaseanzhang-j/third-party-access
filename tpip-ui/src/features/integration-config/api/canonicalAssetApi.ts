@@ -43,7 +43,7 @@ export interface CreateCanonicalContractInput {
   operationId: number; contractCode: string; contractName: string; contractKind: ContractKind; description: string | null
 }
 export interface CreateCanonicalContractVersionInput {
-  semanticVersion: string; schemaStandard: 'JSON_SCHEMA_2020_12'; schemaDocument: Record<string, unknown>
+  schemaStandard: 'JSON_SCHEMA_2020_12'; schemaDocument: Record<string, unknown>
   exampleDocument: unknown | null; compatibilityMode: CompatibilityMode
 }
 

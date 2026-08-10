@@ -42,6 +42,13 @@ class PolicyPlanComposerTest {
                 () -> composer.compose("sms.send.policy", 1, List.of(layer, layer)));
     }
 
+    @Test
+    void supportsDisableOnlyInterfaceLayer() {
+        var channel = new PolicyPlanLayer("channel", plan("channel", step("auth", "builtin.auth.api-key")), Set.of());
+        var contract = new PolicyPlanLayer("interface", null, Set.of("auth"));
+        assertEquals(Map.of(), composer.compose("sms.send.policy", 1, List.of(channel, contract)).stages());
+    }
+
     private static CompiledPolicyPlan plan(String code, CompiledPolicyStep... steps) {
         return new CompiledPolicyPlan(code, 1, Map.of(PolicyStage.BEFORE_TRANSPORT, List.of(steps)), "a".repeat(64));
     }

@@ -41,7 +41,7 @@ const pageTitle = computed(() => String(route.meta.title ?? 'TPIP 工作台'))
         <div class="brand-mark">TP</div>
         <div>
           <strong>TPIP</strong>
-          <span>Integration Platform</span>
+          <span>第三方接入平台</span>
         </div>
       </div>
       <el-menu :default-active="activeMenu" router class="side-menu">
@@ -61,18 +61,18 @@ const pageTitle = computed(() => String(route.meta.title ?? 'TPIP 工作台'))
         <el-sub-menu index="advanced-assets">
           <template #title><span class="menu-dot menu-dot--advanced" /><span>高级管理</span></template>
           <el-menu-item index="/integration-assets/canonical">标准契约资产</el-menu-item>
-          <el-menu-item index="/integration-assets/provider-contract-versions">第三方协议版本</el-menu-item>
+          <el-menu-item index="/integration-assets/provider-contract-versions">第三方报文结构</el-menu-item>
           <el-menu-item index="/integration-assets/mappings">JSONPath 字段映射</el-menu-item>
-          <el-menu-item index="/integration-assets/policies">Policy DSL</el-menu-item>
-          <el-menu-item index="/integration-assets/binding-versions">BindingVersion</el-menu-item>
-          <el-menu-item index="/integration-assets/fixture-suites">FixtureSuite</el-menu-item>
-          <el-menu-item index="/integration-assets/workspaces">Workspace 验证</el-menu-item>
-          <el-menu-item index="/integration-assets/releases">评审与 Bundle</el-menu-item>
-          <el-menu-item index="/integration-assets/deployments">Deployment</el-menu-item>
+          <el-menu-item index="/integration-assets/policies">执行规则</el-menu-item>
+          <el-menu-item index="/integration-assets/binding-versions">可执行配置版本</el-menu-item>
+          <el-menu-item index="/integration-assets/fixture-suites">验证用例集</el-menu-item>
+          <el-menu-item index="/integration-assets/workspaces">配置验证空间</el-menu-item>
+          <el-menu-item index="/integration-assets/releases">评审与发布包</el-menu-item>
+          <el-menu-item index="/integration-assets/deployments">运行版本</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="operations-governance">
           <template #title><span class="menu-dot menu-dot--governance" /><span>运营治理</span></template>
-          <el-menu-item index="/workspaces">Workspace 资产</el-menu-item>
+          <el-menu-item index="/workspaces">验证空间资产</el-menu-item>
           <el-menu-item index="/governance-policies">治理策略资产</el-menu-item>
           <el-menu-item index="/drift-workbench">漂移治理工作台</el-menu-item>
           <el-menu-item index="/drift-operations">治理操作证据</el-menu-item>
@@ -91,12 +91,12 @@ const pageTitle = computed(() => String(route.meta.title ?? 'TPIP 工作台'))
     <main class="main-panel">
       <header class="top-bar">
         <div>
-          <span class="eyebrow">THIRD-PARTY INTEGRATION PLATFORM</span>
+          <span class="eyebrow">第三方接入平台</span>
           <h1>{{ pageTitle }}</h1>
         </div>
         <div class="top-actions">
           <ControlPlaneHealth />
-          <div class="environment-pill"><span /> LOCAL</div>
+          <div class="environment-pill"><span /> 本地环境</div>
         </div>
       </header>
       <div class="content-panel"><router-view /></div>

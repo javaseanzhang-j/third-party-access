@@ -1,5 +1,7 @@
 package com.ftk.tpip.adapters.persistence.jdbc.access;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ftk.tpip.access.domain.model.AccessChannel;
 import com.ftk.tpip.access.domain.model.AccessChannelStatus;
 import com.ftk.tpip.access.domain.model.AccessParameter;
@@ -8,12 +10,15 @@ import com.ftk.tpip.access.domain.model.AccessParameterLocation;
 import com.ftk.tpip.access.domain.model.AccessParameterOverrideMode;
 import com.ftk.tpip.access.domain.model.AccessParameterScope;
 import com.ftk.tpip.access.domain.model.AccessParameterSource;
+import com.ftk.tpip.access.domain.model.AccessPolicyLifecycleStatus;
+import com.ftk.tpip.access.domain.model.AccessPolicyVersion;
 import com.ftk.tpip.access.domain.repository.AccessChannelRepository;
 import com.ftk.tpip.shared.AssetCode;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -48,9 +53,28 @@ public class JdbcAccessChannelRepository implements AccessChannelRepository {
             rs.getLong("row_version"), rs.getTimestamp("created_at").toInstant(),
             rs.getTimestamp("updated_at").toInstant());
 
-    private final JdbcTemplate jdbc;
+    private static final String POLICY_COLUMNS = """
+            id, channel_id, scope_type, provider_contract_id, policy_code, policy_name, version_no,
+            normalized_document, disabled_step_ids, compiler_version, content_checksum,
+            lifecycle_status, published_at, created_at
+            """;
 
-    public JdbcAccessChannelRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper json;
+    private final RowMapper<AccessPolicyVersion> policyMapper = (rs, rowNum) -> {
+        java.sql.Timestamp published = rs.getTimestamp("published_at");
+        return new AccessPolicyVersion(rs.getLong("id"), rs.getLong("channel_id"),
+                AccessParameterScope.valueOf(rs.getString("scope_type")), nullableLong(rs, "provider_contract_id"),
+                AssetCode.of(rs.getString("policy_code")), rs.getString("policy_name"), rs.getInt("version_no"),
+                rs.getString("normalized_document"), disabled(rs.getString("disabled_step_ids")),
+                rs.getString("compiler_version"), rs.getString("content_checksum"),
+                AccessPolicyLifecycleStatus.valueOf(rs.getString("lifecycle_status")),
+                published == null ? null : published.toInstant(), rs.getTimestamp("created_at").toInstant());
+    };
+
+    public JdbcAccessChannelRepository(JdbcTemplate jdbc, ObjectMapper json) {
+        this.jdbc = jdbc; this.json = json;
+    }
 
     @Override public Optional<AccessChannel> findById(long id) {
         return jdbc.query("SELECT " + CHANNEL_COLUMNS + " FROM tpip_access_channel WHERE id=?",
@@ -154,6 +178,70 @@ public class JdbcAccessChannelRepository implements AccessChannelRepository {
         return saved;
     }
 
+    @Override public Optional<AccessPolicyVersion> findPolicyVersion(long channelId, long versionId) {
+        return jdbc.query("SELECT " + POLICY_COLUMNS
+                + " FROM tpip_access_policy_version WHERE channel_id=? AND id=?", policyMapper, channelId, versionId)
+                .stream().findFirst();
+    }
+
+    @Override public List<AccessPolicyVersion> findPolicyVersions(long channelId, AccessParameterScope scope,
+            Long providerContractId) {
+        return jdbc.query("SELECT " + POLICY_COLUMNS
+                + " FROM tpip_access_policy_version WHERE channel_id=? AND scope_type=? AND scope_key=? ORDER BY version_no DESC",
+                policyMapper, channelId, scope.name(), scopeKey(scope, providerContractId));
+    }
+
+    @Override public Optional<AccessPolicyVersion> findLatestPublishedPolicyVersion(long channelId,
+            AccessParameterScope scope, Long providerContractId) {
+        return jdbc.query("SELECT " + POLICY_COLUMNS
+                + " FROM tpip_access_policy_version WHERE channel_id=? AND scope_type=? AND scope_key=?"
+                + " AND lifecycle_status='PUBLISHED' ORDER BY version_no DESC LIMIT 1", policyMapper,
+                channelId, scope.name(), scopeKey(scope, providerContractId)).stream().findFirst();
+    }
+
+    @Override public AccessPolicyVersion createPolicyVersion(AccessPolicyVersion version, String actor) {
+        jdbc.queryForObject("SELECT id FROM tpip_access_channel WHERE id=? FOR UPDATE", Long.class, version.channelId());
+        String scopeKey = version.scopeKey();
+        Integer number = jdbc.queryForObject("SELECT COALESCE(MAX(version_no),0)+1 FROM tpip_access_policy_version"
+                + " WHERE channel_id=? AND scope_type=? AND scope_key=?", Integer.class,
+                version.channelId(), version.scope().name(), scopeKey);
+        String sql = """
+                INSERT INTO tpip_access_policy_version(channel_id,scope_type,scope_key,provider_contract_id,
+                    policy_code,policy_name,version_no,normalized_document,disabled_step_ids,compiler_version,
+                    content_checksum,lifecycle_status,created_by)
+                VALUES(?,?,?,?,?,?,?,CAST(? AS JSON),CAST(? AS JSON),?,?,'DRAFT',?)
+                """;
+        KeyHolder keys = new GeneratedKeyHolder();
+        jdbc.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            statement.setLong(1, version.channelId()); statement.setString(2, version.scope().name());
+            statement.setString(3, scopeKey);
+            if (version.providerContractId() == null) statement.setNull(4, java.sql.Types.BIGINT);
+            else statement.setLong(4, version.providerContractId());
+            statement.setString(5, version.policyCode().value()); statement.setString(6, version.policyName());
+            statement.setInt(7, number == null ? 1 : number); statement.setString(8, version.normalizedDocument());
+            statement.setString(9, jsonValue(version.disabledStepIds()));
+            statement.setString(10, version.compilerVersion()); statement.setString(11, version.contentChecksum());
+            statement.setString(12, actor); return statement;
+        }, keys);
+        if (keys.getKey() == null) throw new IllegalStateException("MySQL did not return access policy version id");
+        AccessPolicyVersion saved = findPolicyVersion(version.channelId(), keys.getKey().longValue()).orElseThrow();
+        audit("ACCESS_POLICY_VERSION_CREATED", saved.policyCode().value(), actor,
+                "Created " + saved.scopeKey() + " policy version " + saved.versionNo());
+        return saved;
+    }
+
+    @Override public AccessPolicyVersion publishPolicyVersion(long channelId, long versionId, String actor) {
+        int updated = jdbc.update("UPDATE tpip_access_policy_version SET lifecycle_status='PUBLISHED',"
+                + " published_at=CURRENT_TIMESTAMP(3) WHERE channel_id=? AND id=? AND lifecycle_status='DRAFT'",
+                channelId, versionId);
+        if (updated == 0) throw new IllegalArgumentException("only a DRAFT access policy version can be published");
+        AccessPolicyVersion saved = findPolicyVersion(channelId, versionId).orElseThrow();
+        audit("ACCESS_POLICY_VERSION_PUBLISHED", saved.policyCode().value(), actor,
+                "Published " + saved.scopeKey() + " policy version " + saved.versionNo());
+        return saved;
+    }
+
     private void audit(String type, String code, String actor, String summary) {
         jdbc.update("""
                 INSERT INTO tpip_audit_event(event_id,event_type,actor_type,actor_code,asset_type,asset_code,event_summary)
@@ -163,5 +251,23 @@ public class JdbcAccessChannelRepository implements AccessChannelRepository {
 
     private static Long nullableLong(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
         long value = rs.getLong(column); return rs.wasNull() ? null : value;
+    }
+
+    private Set<String> disabled(String value) {
+        try { return json.readValue(value, new TypeReference<Set<String>>() {}); }
+        catch (Exception failure) { throw new IllegalStateException("Stored disabled_step_ids is invalid", failure); }
+    }
+    private String jsonValue(Object value) {
+        try { return json.writeValueAsString(value); }
+        catch (Exception failure) { throw new IllegalArgumentException("Cannot serialize access policy value", failure); }
+    }
+    private static String scopeKey(AccessParameterScope scope, Long providerContractId) {
+        if (scope == AccessParameterScope.CHANNEL) {
+            if (providerContractId != null) throw new IllegalArgumentException("CHANNEL scope must not reference providerContractId");
+            return "CHANNEL";
+        }
+        if (providerContractId == null || providerContractId <= 0)
+            throw new IllegalArgumentException("INTERFACE scope requires providerContractId");
+        return "INTERFACE:" + providerContractId;
     }
 }

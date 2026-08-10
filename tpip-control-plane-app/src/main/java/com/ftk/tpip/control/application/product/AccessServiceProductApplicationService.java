@@ -3,6 +3,7 @@ package com.ftk.tpip.control.application.product;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ftk.tpip.catalog.domain.model.*;
 import com.ftk.tpip.catalog.domain.repository.*;
+import com.ftk.tpip.access.domain.repository.AccessChannelRepository;
 import com.ftk.tpip.control.application.catalog.CanonicalSchemaContentCanonicalizer;
 import com.ftk.tpip.control.application.integration.IntegrationBindingVersionApplicationService;
 import com.ftk.tpip.control.application.integration.IntegrationMappingApplicationService;
@@ -36,6 +37,7 @@ public class AccessServiceProductApplicationService {
     private final IntegrationMappingApplicationService mappingService;
     private final IntegrationPolicyApplicationService policyService;
     private final IntegrationBindingVersionApplicationService bindingVersionService;
+    private final AccessChannelRepository accessChannels;
 
     public AccessServiceProductApplicationService(CatalogHierarchyRepository catalog,
             CanonicalOperationRepository operations, CanonicalContractRepository contracts,
@@ -44,7 +46,8 @@ public class AccessServiceProductApplicationService {
             ProviderEndpointRepository endpoints, CredentialRefRepository credentials,
             IntegrationMappingApplicationService mappingService,
             IntegrationPolicyApplicationService policyService,
-            IntegrationBindingVersionApplicationService bindingVersionService) {
+            IntegrationBindingVersionApplicationService bindingVersionService,
+            AccessChannelRepository accessChannels) {
         this.catalog = catalog;
         this.operations = operations;
         this.contracts = contracts;
@@ -54,6 +57,7 @@ public class AccessServiceProductApplicationService {
         this.canonicalizer = canonicalizer;
         this.endpoints = endpoints; this.credentials = credentials; this.mappingService = mappingService;
         this.policyService = policyService; this.bindingVersionService = bindingVersionService;
+        this.accessChannels = accessChannels;
     }
 
     @Transactional
@@ -108,6 +112,14 @@ public class AccessServiceProductApplicationService {
     @Transactional
     public ProvisionedTargetView provisionTarget(long serviceId, ProvisionTargetCommand command, String actor) {
         String user = actor(actor);
+        ProviderContract selectedContract = providerContracts.findById(command.providerContractId())
+                .orElseThrow(() -> new IllegalArgumentException("The selected third-party interface does not exist"));
+        var selectedChannel = accessChannels.findById(command.accessChannelId())
+                .orElseThrow(() -> new IllegalArgumentException("The selected access channel does not exist"));
+        if (selectedChannel.providerId() != selectedContract.providerId()
+                || !accessChannels.hasInterface(selectedChannel.id(), selectedContract.id())) {
+            throw new IllegalArgumentException("The access channel must belong to the same provider and contain the selected interface");
+        }
         IntegrationBinding binding = createTarget(serviceId, command.providerContractId(), command.targetName(),
                 command.ownerCode(), ".t." + command.providerContractId() + ".c." + command.accessChannelId(),
                 false, user);
@@ -164,12 +176,12 @@ public class AccessServiceProductApplicationService {
         String stepId;
         String policyType;
         if (authentication.mode() == AuthenticationMode.API_KEY_POLICY) {
-            stepId = "api-key";
+            stepId = "authentication";
             policyType = "builtin.auth.api-key@1.0.0";
             with.put("headerName", optional(authentication.headerName(), "X-API-Key"))
                     .put("prefix", optional(authentication.prefix(), ""));
         } else if (authentication.mode() == AuthenticationMode.HMAC_SHA256_POLICY) {
-            stepId = "request-signature";
+            stepId = "authentication";
             policyType = "builtin.auth.hmac-sha256@1.0.0";
             with.put("sourceTemplate", required(authentication.sourceTemplate(), "sourceTemplate"))
                     .put("headerName", optional(authentication.headerName(), "X-Signature"))

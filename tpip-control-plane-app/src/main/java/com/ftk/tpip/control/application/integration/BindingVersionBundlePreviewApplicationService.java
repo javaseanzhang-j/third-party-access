@@ -10,6 +10,8 @@ import com.ftk.tpip.mapping.ir.CompiledMappingPlan;
 import com.ftk.tpip.provider.domain.model.*;
 import com.ftk.tpip.provider.domain.repository.*;
 import com.ftk.tpip.policy.ir.CompiledPolicyPlan;
+import com.ftk.tpip.policy.ir.PolicyPlanLayer;
+import com.ftk.tpip.policy.compiler.PolicyPlanComposer;
 import com.ftk.tpip.routing.domain.model.*;
 import com.ftk.tpip.routing.domain.repository.ServiceRouteRepository;
 import com.ftk.tpip.access.domain.model.*;
@@ -32,6 +34,7 @@ public class BindingVersionBundlePreviewApplicationService {
     private final ServiceRouteRepository routes;
     private final AccessChannelRepository channels;
     private final AccessParameterResolver accessResolver=new AccessParameterResolver();
+    private final PolicyPlanComposer policyComposer=new PolicyPlanComposer();
 
     public BindingVersionBundlePreviewApplicationService(IntegrationBindingRepository bindings,
             IntegrationBindingVersionRepository versions,CanonicalOperationRepository operations,
@@ -89,19 +92,35 @@ public class BindingVersionBundlePreviewApplicationService {
         var endpoint=endpoints.findById(frozen.endpointId()).orElseThrow();
         List<CompiledMappingPlan> plans=List.of(mapping(frozen.requestMappingVersionId()),mapping(frozen.responseMappingVersionId()));
         CompiledPolicyPlan policyPlan=null;Set<String> secrets=new TreeSet<>();
-        if(frozen.policyVersionId()!=null){IntegrationPolicyVersion pv=policies.findVersionById(frozen.policyVersionId()).orElseThrow();policyPlan=policyService.plan(pv.policyId(),pv.id());collectSecrets(read(pv.normalizedDocument()),secrets);}
+        CompiledPolicyPlan implementationPlan=null;IntegrationPolicyVersion implementationVersion=null;List<AccessPolicyVersion> scopedPolicyVersions=new ArrayList<>();
+        if(frozen.policyVersionId()!=null){implementationVersion=policies.findVersionById(frozen.policyVersionId()).orElseThrow();implementationPlan=policyService.plan(implementationVersion.policyId(),implementationVersion.id());}
+        if(frozen.accessChannelId()!=null){
+            List<PolicyPlanLayer> layers=new ArrayList<>();boolean scoped=false;
+            AccessPolicyVersion channelPolicy=channels.findLatestPublishedPolicyVersion(frozen.accessChannelId(),AccessParameterScope.CHANNEL,null).orElse(null);
+            if(channelPolicy!=null){layers.add(layer("channel",channelPolicy));scopedPolicyVersions.add(channelPolicy);scoped=true;}
+            AccessPolicyVersion interfacePolicy=channels.findLatestPublishedPolicyVersion(frozen.accessChannelId(),AccessParameterScope.INTERFACE,binding.providerContractId()).orElse(null);
+            if(interfacePolicy!=null){layers.add(layer("interface",interfacePolicy));scopedPolicyVersions.add(interfacePolicy);scoped=true;}
+            if(implementationPlan!=null)layers.add(new PolicyPlanLayer("implementation",implementationPlan,Set.of()));
+            if(scoped){CompiledPolicyPlan effective=policyComposer.compose(operation.operationCode().value()+".effective-policy",frozen.versionNo(),layers);policyPlan=effective.stages().isEmpty()?null:effective;}
+            else policyPlan=implementationPlan;
+        }else policyPlan=implementationPlan;
+        if(policyPlan!=null)collectSecrets(json.valueToTree(policyPlan),secrets);
         String credentialReference=null;
         if(endpoint.credentialRefId()!=null){CredentialRef credential=credentials.findById(endpoint.credentialRefId()).orElseThrow();credentialReference=credential.secretUri();secrets.add(credentialReference);}
+        ObjectNode endpointNode=endpointSnapshot(endpoint,credentialReference,frozen.accessChannelId(),binding.providerContractId(),secrets);
+        freezePolicyLineage(endpointNode,scopedPolicyVersions,implementationVersion,policyPlan);
         return bundleCompiler.compile(new BundleCompilationRequest(bundleCode,bundleVersion,
                 operation.operationCode().value(),endpoint.environmentCode(),binding.bindingCode().value()+"@"+frozen.versionNo(),
                 read(requestContract.schemaDocument()),read(responseContract.schemaDocument()),providerSnapshot(provider),
-                plans,policyPlan,endpointSnapshot(endpoint,credentialReference,frozen.accessChannelId(),binding.providerContractId(),secrets),List.copyOf(secrets),RUNTIME_COMPATIBILITY));
+                plans,policyPlan,endpointNode,List.copyOf(secrets),RUNTIME_COMPATIBILITY));
     }
     private IntegrationBindingVersion latestPublished(long bindingId){return versions.findVersions(bindingId).stream()
             .filter(v->v.lifecycleStatus()==BindingVersionLifecycleStatus.PUBLISHED)
             .max(Comparator.comparingInt(IntegrationBindingVersion::versionNo))
             .orElseThrow(()->new IllegalStateException("Route target has no PUBLISHED BindingVersion: "+bindingId));}
     private CompiledMappingPlan mapping(Long versionId){if(versionId==null)throw new IllegalStateException("Frozen mapping version is missing");IntegrationMappingVersion v=mappings.findVersionById(versionId).orElseThrow();IntegrationMapping d=mappings.findById(v.mappingId()).orElseThrow();return mappingCompiler.compile(d.mappingCode().value(),d.direction(),v.versionNo(),v.rules());}
+    private PolicyPlanLayer layer(String code,AccessPolicyVersion version){CompiledPolicyPlan plan=version.normalizedDocument()==null?null:policyService.compileScoped(version.policyCode().value(),version.versionNo(),read(version.normalizedDocument()));return new PolicyPlanLayer(code,plan,version.disabledStepIds());}
+    private void freezePolicyLineage(ObjectNode endpoint,List<AccessPolicyVersion> scoped,IntegrationPolicyVersion implementation,CompiledPolicyPlan effective){if(scoped.isEmpty()&&implementation==null)return;ObjectNode evidence=endpoint.putObject("policyComposition");evidence.put("strategy","CHANNEL_INTERFACE_IMPLEMENTATION");if(effective!=null)evidence.put("effectiveChecksum",effective.checksum());ArrayNode layers=evidence.putArray("layers");for(AccessPolicyVersion version:scoped){ObjectNode layer=layers.addObject();layer.put("scope",version.scope().name());layer.put("versionId",version.id());layer.put("versionNo",version.versionNo());layer.put("contentChecksum",version.contentChecksum());if(version.providerContractId()!=null)layer.put("providerContractId",version.providerContractId());}if(implementation!=null){ObjectNode layer=layers.addObject();layer.put("scope","IMPLEMENTATION");layer.put("versionId",implementation.id());layer.put("versionNo",implementation.versionNo());layer.put("contentChecksum",implementation.contentChecksum());}}
     private ObjectNode providerSnapshot(ProviderContractVersion v){ObjectNode n=json.createObjectNode();n.put("semanticVersion",v.semanticVersion().toString());put(n,"requestSchema",v.requestSchema());put(n,"responseSchema",v.responseSchema());put(n,"errorSchema",v.errorSchema());put(n,"callbackSchema",v.callbackSchema());n.put("contentChecksum",v.contentChecksum());return n;}
     private ObjectNode endpointSnapshot(ProviderEndpoint e,String credential,Long channelId,long providerContractId,Set<String> secrets){ObjectNode n=json.createObjectNode();n.put("endpointCode",e.endpointCode().value());n.put("revisionNo",e.revisionNo());n.put("environmentCode",e.environmentCode());n.put("protocolScheme",e.protocolScheme().value());n.put("baseUrl",e.baseUrl());n.put("resourcePath",e.resourcePath());n.put("httpMethod",e.httpMethod().name());if(e.contentType()!=null)n.put("contentType",e.contentType());n.put("charsetName",e.charsetName());n.put("connectTimeoutMs",e.connectTimeoutMs());n.put("readTimeoutMs",e.readTimeoutMs());n.put("totalTimeoutMs",e.totalTimeoutMs());if(credential!=null)n.put("credentialReference",credential);put(n,"networkConfig",e.networkConfig());put(n,"tlsConfig",e.tlsConfig());n.put("contentChecksum",e.contentChecksum());if(channelId!=null)freezeAccessPlan(n,channelId,providerContractId,e,secrets);return n;}
     private void freezeAccessPlan(ObjectNode endpoint,long channelId,long contractId,ProviderEndpoint frozen,Set<String> secrets){

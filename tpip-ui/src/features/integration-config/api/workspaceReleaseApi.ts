@@ -34,8 +34,8 @@ export const workspaceReleaseApi = {
   }, headers(input.approverCode)),
   bundles: (workspaceId: number, signal?: AbortSignal) =>
     getJson<DeploymentBundle[]>(`/control/v1/workspaces/${workspaceId}/bundles`, signal),
-  compile: (workspaceId: number, bundleCode: string, bundleVersion: string, rowVersion: number) =>
-    postJson<DeploymentBundle>(`/control/v1/workspaces/${workspaceId}/bundles`, { bundleCode, bundleVersion, rowVersion }, headers()),
+  compile: (workspaceId: number, bundleCode: string, rowVersion: number) =>
+    postJson<DeploymentBundle>(`/control/v1/workspaces/${workspaceId}/bundles`, { bundleCode, rowVersion }, headers()),
   publish: (bundleId: number) =>
     postJson<DeploymentBundle>(`/control/v1/bundles/${bundleId}:publish`, {}, headers())
 }

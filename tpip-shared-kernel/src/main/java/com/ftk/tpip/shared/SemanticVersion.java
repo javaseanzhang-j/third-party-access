@@ -23,6 +23,11 @@ public record SemanticVersion(int major, int minor, int patch) {
         }
     }
 
+    public SemanticVersion nextPatch() {
+        if (patch == Integer.MAX_VALUE) throw new IllegalStateException("Patch version overflow");
+        return new SemanticVersion(major, minor, patch + 1);
+    }
+
     @Override
     public String toString() {
         return major + "." + minor + "." + patch;

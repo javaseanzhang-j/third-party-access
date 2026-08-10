@@ -91,7 +91,6 @@ public class ProviderContractApplicationService {
     @Transactional
     public ProviderContractVersion createVersion(
             long contractId,
-            String semanticVersion,
             JsonNode requestSchema,
             JsonNode responseSchema,
             JsonNode errorSchema,
@@ -99,11 +98,12 @@ public class ProviderContractApplicationService {
             JsonNode examples,
             String actor) {
         get(contractId);
+        SemanticVersion semanticVersion = nextSemanticVersion(contractId);
         CanonicalContractContent content = contentCanonicalizer.canonicalize(
                 requestSchema, responseSchema, errorSchema, callbackSchema, examples);
         ProviderContractVersion draft = ProviderContractVersion.draft(
                 contractId,
-                SemanticVersion.parse(semanticVersion),
+                semanticVersion,
                 content.requestSchema(),
                 content.responseSchema(),
                 content.errorSchema(),
@@ -111,6 +111,16 @@ public class ProviderContractApplicationService {
                 content.examples(),
                 content.checksum());
         return contractRepository.createVersion(draft, normalizeActor(actor));
+    }
+
+    private SemanticVersion nextSemanticVersion(long contractId) {
+        return contractRepository.findVersions(contractId).stream()
+                .map(ProviderContractVersion::semanticVersion)
+                .max(java.util.Comparator.comparingInt(SemanticVersion::major)
+                        .thenComparingInt(SemanticVersion::minor)
+                        .thenComparingInt(SemanticVersion::patch))
+                .map(SemanticVersion::nextPatch)
+                .orElse(new SemanticVersion(1, 0, 0));
     }
 
     @Transactional(readOnly = true)

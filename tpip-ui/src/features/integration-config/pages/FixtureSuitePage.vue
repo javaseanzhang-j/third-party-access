@@ -6,18 +6,13 @@ import { ApiError } from '@/api/http'
 import AsyncStatePanel from '@/components/AsyncStatePanel.vue'
 import { fixtureSuiteApi, type CreateFixtureCaseInput, type FixtureSuiteVersionAsset } from '../api/fixtureSuiteApi'
 import { mappingAssetApi } from '../api/mappingAssetApi'
-
-interface CaseDraft {
-  caseCode: string; caseName: string; executionMode: 'MAPPING' | 'REMOTE_CALL'
-  direction: 'OUTBOUND_REQUEST' | 'INBOUND_RESPONSE'; sourceText: string; expectedText: string
-  expectedSuccess: boolean; expectedDiagnosticCode: string; assertionsText: string
-}
+import { createFixtureCaseInput, type FixtureCaseDraft } from '../model/fixtureEditorModel'
 
 const selectedBindingId = ref(0); const selectedSuiteId = ref(0); const errorMessage = ref('')
 const suiteDialog = ref(false); const versionDialog = ref(false); const detailDialog = ref(false)
 const detailVersion = ref<FixtureSuiteVersionAsset | null>(null)
 const suiteCode = ref(''); const suiteName = ref(''); const suiteDescription = ref('')
-const cases = ref<CaseDraft[]>([])
+const cases = ref<FixtureCaseDraft[]>([])
 
 const bindings = useQuery({ queryKey: ['integration-bindings'], queryFn: ({ signal }) => mappingAssetApi.bindings(signal) })
 const bindingItems = computed(() => bindings.data.value?.items.filter(item => item.status === 'ACTIVE') ?? [])
@@ -30,24 +25,10 @@ watch(bindingItems, items => { if (items.length && !items.some(item => item.id =
 watch(suiteItems, items => { if (!items.some(item => item.id === selectedSuiteId.value)) selectedSuiteId.value = items[0]?.id ?? 0 }, { immediate: true })
 
 function apiMessage(error: Error): string { return error instanceof ApiError ? error.message : error.message || '请求失败，请确认 Control Plane 状态。' }
-function parseObject(text: string, field: string, nullable = false): Record<string, unknown> | null {
-  if (nullable && !text.trim()) return null
-  let value: unknown
-  try { value = JSON.parse(text) as unknown } catch { throw new Error(`${field} 不是合法 JSON。`) }
-  if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(`${field} 必须是 JSON Object。`)
-  return value as Record<string, unknown>
-}
-function parseAssertions(text: string): unknown[] | null {
-  if (!text.trim()) return null
-  let value: unknown
-  try { value = JSON.parse(text) as unknown } catch { throw new Error('Assertions 不是合法 JSON。') }
-  if (!Array.isArray(value) || !value.length) throw new Error('Assertions 必须是非空 JSON Array。')
-  return value
-}
-function newCase(index = cases.value.length): CaseDraft {
+function newCase(index = cases.value.length): FixtureCaseDraft {
   return { caseCode: `mapping.case-${index + 1}`, caseName: '映射成功场景', executionMode: 'MAPPING',
-    direction: 'OUTBOUND_REQUEST', sourceText: '{\n  "customerId": "C1001"\n}',
-    expectedText: '{\n  "customer_id": "C1001"\n}', expectedSuccess: true, expectedDiagnosticCode: '',
+    direction: 'OUTBOUND_REQUEST', validationMode: 'FULL_MATCH', sourceText: '{}',
+    expectedText: '{}', expectedSuccess: true, expectedDiagnosticCode: '',
     assertionsText: '[\n  {"code":"mapping-success","type":"SUCCESS","expected":true}\n]' }
 }
 function openSuite(): void {
@@ -57,9 +38,10 @@ function openSuite(): void {
 }
 function openVersion(): void { cases.value = [newCase(0)]; errorMessage.value = ''; versionDialog.value = true }
 function removeCase(index: number): void { if (cases.value.length > 1) cases.value.splice(index, 1) }
-function modeChanged(item: CaseDraft): void {
+function modeChanged(item: FixtureCaseDraft): void {
   if (item.executionMode === 'REMOTE_CALL') {
     item.direction = 'OUTBOUND_REQUEST'
+    item.validationMode = 'RULES'
     item.assertionsText = '[\n  {"code":"http-ok","type":"HTTP_STATUS","operator":"EQUALS","expected":200}\n]'
   }
 }
@@ -70,14 +52,7 @@ const publish = useMutation({ mutationFn: (row: FixtureSuiteVersionAsset) => fix
 function submitVersion(): void {
   errorMessage.value = ''
   try {
-    const input = cases.value.map((item, index): CreateFixtureCaseInput => ({
-      caseCode: item.caseCode.trim(), caseName: item.caseName.trim(), caseOrder: index,
-      executionMode: item.executionMode, direction: item.direction,
-      source: parseObject(item.sourceText, `Case ${index + 1} Source`)! ,
-      expected: parseObject(item.expectedText, `Case ${index + 1} Expected`, true),
-      expectedSuccess: item.expectedSuccess, expectedDiagnosticCode: item.expectedDiagnosticCode.trim() || null,
-      assertions: parseAssertions(item.assertionsText)
-    }))
+    const input = cases.value.map((item, index) => createFixtureCaseInput(item, index))
     if (input.some(item => !item.caseCode || !item.caseName)) throw new Error('每个 Case 都必须填写编码和名称。')
     if (new Set(input.map(item => item.caseCode)).size !== input.length) throw new Error('Case 编码不能重复。')
     createVersion.mutate(input)
@@ -104,7 +79,11 @@ function bindingLabel(id: number): string { const item = bindingItems.value.find
 
     <el-dialog v-model="suiteDialog" title="新建 FixtureSuite" width="660px"><el-form class="dialog-form" label-position="top"><el-form-item label="Suite Code" required><el-input v-model="suiteCode" /></el-form-item><el-form-item label="Suite Name" required><el-input v-model="suiteName" /></el-form-item><el-form-item label="说明"><el-input v-model="suiteDescription" type="textarea" :rows="3" /></el-form-item></el-form><template #footer><el-button @click="suiteDialog = false">取消</el-button><el-button type="primary" :disabled="!suiteCode.trim() || !suiteName.trim()" :loading="createSuite.isPending.value" @click="createSuite.mutate()">创建稳定资产</el-button></template></el-dialog>
 
-    <el-dialog v-model="versionDialog" title="创建 FixtureSuiteVersion" width="1120px" top="4vh"><el-alert type="warning" :closable="false" title="创建后 Case 内容和 checksum 不可修改；修正测试数据必须创建新版本。" show-icon /><div class="fixture-editor-heading"><span>Fixture Cases（{{ cases.length }}）</span><el-button @click="cases.push(newCase())">添加 Case</el-button></div><div class="fixture-case-editor"><article v-for="(item, index) in cases" :key="index" class="fixture-case-card"><div class="fixture-case-title"><strong>Case {{ index + 1 }}</strong><el-button link type="danger" :disabled="cases.length === 1" @click="removeCase(index)">移除</el-button></div><el-form label-position="top"><div class="form-two-columns"><el-form-item label="Case Code" required><el-input v-model="item.caseCode" /></el-form-item><el-form-item label="Case Name" required><el-input v-model="item.caseName" /></el-form-item><el-form-item label="Execution Mode"><el-select v-model="item.executionMode" @change="modeChanged(item)"><el-option label="MAPPING（推荐）" value="MAPPING" /><el-option label="REMOTE_CALL（受门禁）" value="REMOTE_CALL" /></el-select></el-form-item><el-form-item label="Direction"><el-select v-model="item.direction" :disabled="item.executionMode === 'REMOTE_CALL'"><el-option label="OUTBOUND_REQUEST" value="OUTBOUND_REQUEST" /><el-option label="INBOUND_RESPONSE" value="INBOUND_RESPONSE" /></el-select></el-form-item><el-form-item label="Expected Success"><el-switch v-model="item.expectedSuccess" /></el-form-item><el-form-item label="Expected Diagnostic Code（兼容字段）"><el-input v-model="item.expectedDiagnosticCode" clearable /></el-form-item></div><div class="fixture-json-grid"><el-form-item label="Source JSON Object" required><el-input v-model="item.sourceText" type="textarea" :rows="8" class="schema-editor" /></el-form-item><el-form-item label="Expected JSON Object（可选兼容字段）"><el-input v-model="item.expectedText" type="textarea" :rows="8" class="schema-editor" /></el-form-item><el-form-item label="FAP Assertions JSON Array"><el-input v-model="item.assertionsText" type="textarea" :rows="8" class="schema-editor" /></el-form-item></div></el-form></article></div><template #footer><el-button @click="versionDialog = false">取消</el-button><el-button type="primary" :loading="createVersion.isPending.value" @click="submitVersion">校验并创建 DRAFT</el-button></template></el-dialog>
+    <el-dialog v-model="versionDialog" title="创建验证用例版本" width="1040px" top="4vh"><el-alert type="warning" :closable="false" title="创建后用例内容和摘要不可修改；修正测试数据必须创建新版本。" show-icon /><div class="fixture-editor-heading"><span>验证场景（{{ cases.length }}）</span><el-button @click="cases.push(newCase())">添加场景</el-button></div><div class="fixture-case-editor"><article v-for="(item, index) in cases" :key="index" class="fixture-case-card"><div class="fixture-case-title"><strong>场景 {{ index + 1 }}</strong><el-button link type="danger" :disabled="cases.length === 1" @click="removeCase(index)">移除</el-button></div><el-form label-position="top">
+      <div class="form-two-columns"><el-form-item label="场景编码" required><el-input v-model="item.caseCode" /></el-form-item><el-form-item label="场景名称" required><el-input v-model="item.caseName" /></el-form-item><el-form-item label="验证方式"><el-select v-model="item.executionMode" @change="modeChanged(item)"><el-option label="字段映射验证（推荐）" value="MAPPING" /><el-option label="受控接口调用" value="REMOTE_CALL" /></el-select></el-form-item><el-form-item label="映射方向"><el-select v-model="item.direction" :disabled="item.executionMode === 'REMOTE_CALL'"><el-option label="业务请求 → 第三方请求" value="OUTBOUND_REQUEST" /><el-option label="第三方返回 → 业务返回" value="INBOUND_RESPONSE" /></el-select></el-form-item></div>
+      <el-form-item label="结果验证方式"><el-radio-group v-model="item.validationMode" :disabled="item.executionMode === 'REMOTE_CALL'"><el-radio-button value="FULL_MATCH">完整结果比较</el-radio-button><el-radio-button value="RULES">按验证规则检查</el-radio-button></el-radio-group><div class="fixture-mode-help">完整结果比较会比较整个输出 JSON；规则检查只验证指定字段。两种方式互斥，不会再出现期望 JSON 被忽略的情况。</div></el-form-item>
+      <div class="fixture-json-grid fixture-json-grid--two"><el-form-item label="输入报文" required><el-input v-model="item.sourceText" type="textarea" :rows="9" class="schema-editor" /></el-form-item><template v-if="item.validationMode === 'FULL_MATCH' && item.executionMode === 'MAPPING'"><div><el-form-item label="预期执行成功"><el-switch v-model="item.expectedSuccess" /></el-form-item><el-form-item v-if="item.expectedSuccess" label="期望输出报文（完整匹配）" required><el-input v-model="item.expectedText" type="textarea" :rows="7" class="schema-editor" /></el-form-item><el-form-item v-else label="预期错误码"><el-input v-model="item.expectedDiagnosticCode" clearable placeholder="可选；留空表示只要求执行失败" /></el-form-item></div></template><el-form-item v-else label="验证规则"><el-input v-model="item.assertionsText" type="textarea" :rows="9" class="schema-editor" /><div class="fixture-mode-help">高级规则格式支持成功状态、JSONPath、JSON Schema、HTTP 状态和响应头；受控接口调用必须使用验证规则。</div></el-form-item></div>
+    </el-form></article></div><template #footer><el-button @click="versionDialog = false">取消</el-button><el-button type="primary" :loading="createVersion.isPending.value" @click="submitVersion">校验并创建草稿</el-button></template></el-dialog>
 
     <el-dialog v-model="detailDialog" title="FixtureSuiteVersion 内容" width="980px"><template v-if="detailVersion"><div class="fact-grid fixture-version-facts"><div class="fact"><label>Revision</label><div>{{ detailVersion.versionNo }}</div></div><div class="fact"><label>状态</label><div>{{ detailVersion.lifecycleStatus }}</div></div><div class="fact"><label>Cases</label><div>{{ detailVersion.cases.length }}</div></div><div class="fact"><label>Checksum</label><div class="mono">{{ detailVersion.contentChecksum }}</div></div></div><pre class="plan-preview">{{ JSON.stringify(detailVersion.cases, null, 2) }}</pre></template><template #footer><el-button @click="detailDialog = false">关闭</el-button></template></el-dialog>
   </section>

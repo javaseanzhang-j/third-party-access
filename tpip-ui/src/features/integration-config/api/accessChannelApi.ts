@@ -9,7 +9,7 @@ export type ParameterDataType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'OBJECT' | 'AR
 export type ParameterOverrideMode = 'REPLACE' | 'DISABLE'
 
 export interface AccessChannelAsset {
-  id: number; providerId: number; channelCode: string; channelName: string; baseUrl: string
+  id: number; providerId: number; providerProductId: number; channelCode: string; channelName: string; baseUrl: string
   credentialRefId: number | null; description: string | null; status: ChannelStatus; rowVersion: number
   createdAt: string; updatedAt: string
 }
@@ -21,8 +21,14 @@ export interface AccessParameterAsset {
   description: string | null; rowVersion: number
 }
 export interface EffectiveParameterAsset { parameter: AccessParameterAsset; resolvedFrom: ParameterScope }
+export interface AccessPolicyVersionAsset {
+  id: number; channelId: number; scope: ParameterScope; providerContractId: number | null
+  policyCode: string; policyName: string; versionNo: number; normalizedDocument: string | null
+  disabledStepIds: string[]; compilerVersion: string; contentChecksum: string
+  lifecycleStatus: 'DRAFT' | 'PUBLISHED'; publishedAt: string | null; createdAt: string
+}
 export interface CreateAccessChannelInput {
-  providerId: number; channelCode: string; channelName: string; baseUrl: string
+  providerId: number; providerProductId: number; channelCode: string; channelName: string; baseUrl: string
   credentialRefId: number | null; description: string | null
 }
 export interface UpdateAccessChannelInput {
@@ -35,11 +41,28 @@ export interface UpsertAccessParameterInput {
   sourceSelector: string | null; secretRefId: number | null; overrideMode: ParameterOverrideMode
   required: boolean; sensitive: boolean; callerOverridable: boolean; description: string | null
 }
+export interface CreateAccessPolicyVersionInput {
+  scope: ParameterScope; providerContractId: number | null; policyName: string
+  document: Record<string, unknown> | null; disabledStepIds: string[]
+}
+export interface ProviderProductAsset {
+  id: number; providerId: number; productCode: string; productName: string
+  description: string | null; status: 'ACTIVE' | 'INACTIVE'; createdAt: string
+}
+export interface CreateProviderProductInput {
+  providerId: number; productCode: string; productName: string; description: string | null
+}
 
 const operator = (import.meta.env.VITE_TPIP_OPERATOR as string | undefined)?.trim() || 'local-ui'
 const headers = { 'X-Operator': operator }
 
 export const accessChannelApi = {
+  products: (providerId?: number, signal?: AbortSignal) => getJson<ProviderProductAsset[]>(
+    `/control/v1/product-model/provider-products${providerId ? `?providerId=${providerId}` : ''}`, signal),
+  createProduct: (input: CreateProviderProductInput) => postJson<ProviderProductAsset>(
+    '/control/v1/product-model/provider-products', input, headers),
+  productInterfaceIds: (productId: number, signal?: AbortSignal) => getJson<number[]>(
+    `/control/v1/product-model/provider-products/${productId}/interfaces`, signal),
   channels: (providerId?: number, signal?: AbortSignal) => getJson<AccessChannelAsset[]>(
     `/control/v1/product-model/channels${providerId ? `?providerId=${providerId}` : ''}`, signal),
   create: (input: CreateAccessChannelInput) => postJson<AccessChannelAsset>(
@@ -55,5 +78,11 @@ export const accessChannelApi = {
   upsertParameter: (channelId: number, input: UpsertAccessParameterInput) => putJson<AccessParameterAsset>(
     `/control/v1/product-model/channels/${channelId}/parameters`, input, headers),
   effective: (channelId: number, providerContractId: number, signal?: AbortSignal) =>
-    getJson<EffectiveParameterAsset[]>(`/control/v1/product-model/channels/${channelId}/effective-configuration?providerContractId=${providerContractId}`, signal)
+    getJson<EffectiveParameterAsset[]>(`/control/v1/product-model/channels/${channelId}/effective-configuration?providerContractId=${providerContractId}`, signal),
+  policyVersions: (channelId: number, scope: ParameterScope, providerContractId?: number | null,
+    signal?: AbortSignal) => getJson<AccessPolicyVersionAsset[]>(`/control/v1/product-model/channels/${channelId}/policy-versions?scope=${scope}${providerContractId ? `&providerContractId=${providerContractId}` : ''}`, signal),
+  createPolicyVersion: (channelId: number, input: CreateAccessPolicyVersionInput) =>
+    postJson<AccessPolicyVersionAsset>(`/control/v1/product-model/channels/${channelId}/policy-versions`, input, headers),
+  publishPolicyVersion: (channelId: number, versionId: number) =>
+    postJson<AccessPolicyVersionAsset>(`/control/v1/product-model/channels/${channelId}/policy-versions/${versionId}:publish`, {}, headers)
 }
