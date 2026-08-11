@@ -1,5 +1,7 @@
 # TPIP 平台功能说明与使用手册
 
+> MCP本地接入属于独立演进中的产品能力，当前启用和验证方式见 [TPIP MCP Edition 本地使用指南 v0.1](./tpip-mcp-edition-local-usage-v0.1.md)。
+
 > 适用版本：当前本地工程基线（Java `0.1.0-SNAPSHOT`、UI `0.1.0`、Flyway `V46`、Runtime `0.2.0`）
 > 使用范围：本地单机、单用户研发和架构验证环境
 

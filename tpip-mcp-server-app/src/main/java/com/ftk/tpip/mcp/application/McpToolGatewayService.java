@@ -37,8 +37,9 @@ public final class McpToolGatewayService {
         attributes.put("protocol", "mcp");
         attributes.put("mcp.tool.name", tool.toolName());
         attributes.put("mcp.tool.version", Integer.toString(tool.versionNo()));
-        if (command.scenario() != null) {
-            attributes.put("scenario", command.scenario());
+        String scenario = tool.fixedScenario() == null ? command.scenario() : tool.fixedScenario();
+        if (scenario != null) {
+            attributes.put("scenario", scenario);
         }
 
         InvocationMetadata metadata = new InvocationMetadata(

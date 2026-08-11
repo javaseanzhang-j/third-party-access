@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: tpip-mcp-server
+
+server:
+  address: ${TPIP_MCP_BIND_ADDRESS:127.0.0.1}
+  port: ${TPIP_MCP_PORT:18083}
+
+tpip:
+  mcp:
+    enabled: ${TPIP_MCP_ENABLED:false}
+    runtime-base-uri: ${TPIP_RUNTIME_BASE_URI:http://127.0.0.1:18081}
+    control-plane-base-uri: ${TPIP_CONTROL_PLANE_BASE_URI:http://127.0.0.1:18082}
+    connect-timeout: ${TPIP_MCP_CONNECT_TIMEOUT:1s}
+    read-timeout: ${TPIP_MCP_READ_TIMEOUT:10s}
+    request-timeout: ${TPIP_MCP_REQUEST_TIMEOUT:30s}
+    allowed-origins:
+      - http://127.0.0.1:${TPIP_MCP_PORT:18083}
+      - http://localhost:${TPIP_MCP_PORT:18083}
+    local-identity:
+      application-id: ${TPIP_MCP_APPLICATION_ID:0}
+      application-code: ${TPIP_MCP_APPLICATION_CODE:}
+      tenant-id: ${TPIP_MCP_TENANT_ID:}
+      app-key: ${TPIP_MCP_APP_KEY:}
+      secret-reference: ${TPIP_MCP_SECRET_REFERENCE:}
+    tools: []
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

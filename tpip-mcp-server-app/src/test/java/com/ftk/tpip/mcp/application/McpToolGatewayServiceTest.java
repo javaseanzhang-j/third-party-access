@@ -70,6 +70,7 @@ class McpToolGatewayServiceTest {
                 "发送业务短信",
                 "向指定手机号码发送验证码或业务通知短信",
                 "sms.send",
+                "login-verification",
                 1,
                 json.createObjectNode().put("type", "object"),
                 json.createObjectNode().put("type", "object"),

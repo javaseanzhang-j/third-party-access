@@ -122,6 +122,7 @@ Tool Asset 建议属性：
 | `versionNo` | 平台自动递增版本 |
 | `title` | 面向人的中文工具名称 |
 | `description` | 供AI判断调用时机的业务描述 |
+| `fixedScenario` | 可选的固定授权场景，避免AI任意选择敏感场景 |
 | `inputSchema` | MCP Tool输入JSON Schema |
 | `outputSchema` | MCP Tool输出JSON Schema |
 | `readOnlyHint` | 是否只读 |
@@ -377,7 +378,7 @@ v0.1只建设“MCP Tool管理”和“MCP调用测试”的最小查询与操�
 
 ## 17. 当前实施状态
 
-已完成第一段工程骨架：
+已完成第一阶段本地工具调用闭环：
 
 - 父工程已加入 `tpip-mcp-server-app` Maven模块；
 - 建立不依赖Spring MVC和MCP SDK的 `McpToolDefinition`、`McpToolAnnotations` 和 `McpClientIdentity`；
@@ -387,6 +388,13 @@ v0.1只建设“MCP Tool管理”和“MCP调用测试”的最小查询与操�
 - 建立 `McpToolGatewayService`，将MCP Tool调用转换为标准 `InvocationRequest` 并通过现有 `RuntimePipeline` 执行；
 - MCP调用元数据写入 `protocol=mcp`、Tool名称、Tool版本、调用方和业务场景，为后续贯通审计提供依据；
 - 未出现在当前调用方目录中的Tool在进入Runtime前安全拒绝；
-- 已补充Tool模型和Runtime调用边界自动化测试。
+- 引入官方 MCP Java SDK 2.0.0，通过 Streamable HTTP 暴露 `/mcp`；
+- 支持 MCP `initialize`、`tools/list` 和 `tools/call`，输入由SDK根据Tool JSON Schema校验；
+- MCP Server使用受控的本地固定应用身份，自行使用Secret Reference解析密钥并签名调用Runtime，通用MCP Client无需实现TPIP HMAC；
+- `tools/list` 只返回“已配置为MCP Tool”且“当前应用已获得已发布服务授权”的交集；
+- 通过 `fixedScenario` 可把Tool限制在固定业务场景，避免调用方自行选择敏感场景；
+- 入口默认关闭并只监听 `127.0.0.1`，浏览器Origin采用允许名单校验；
+- 已补充模型、授权目录、Control Plane授权快照、Runtime签名调用、协议转换、安全校验和官方MCP客户端端到端测试；
+- 本地启用和验证方式见 [TPIP MCP Edition 本地使用指南 v0.1](./tpip-mcp-edition-local-usage-v0.1.md)。
 
-下一段实施内容是接入官方MCP Java SDK、建立Streamable HTTP `/mcp`入口和本地调用方身份适配；在协议入口完成之前，本模块仍属于内部工程骨架，暂不能被MCP Client直接连接。
+当前阶段仍有三项明确限制：MCP Tool定义暂由外部YAML提供，尚未进入Control Plane资产库和业务化UI；Tool与授权在MCP Server启动时形成快照，发布或授权变更后需要重启MCP Server；当前仅支持本机固定身份，不支持远程OAuth/OIDC客户端。下一阶段建设MCP Tool资产持久化、发布流程、查询模型和业务化配置界面。

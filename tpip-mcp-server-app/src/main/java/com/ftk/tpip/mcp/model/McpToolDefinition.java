@@ -10,6 +10,7 @@ public record McpToolDefinition(
         String title,
         String description,
         String serviceCode,
+        String fixedScenario,
         int versionNo,
         JsonNode inputSchema,
         JsonNode outputSchema,
@@ -33,6 +34,7 @@ public record McpToolDefinition(
         if (!SERVICE_CODE.matcher(serviceCode).matches()) {
             throw new IllegalArgumentException("serviceCode is invalid");
         }
+        fixedScenario = normalize(fixedScenario);
         if (versionNo <= 0) {
             throw new IllegalArgumentException("versionNo must be positive");
         }
@@ -61,9 +63,14 @@ public record McpToolDefinition(
     }
 
     private static String required(String value, String field) {
-        if (value == null || value.isBlank()) {
+        String normalized = normalize(value);
+        if (normalized == null) {
             throw new IllegalArgumentException(field + " must not be blank");
         }
-        return value.trim();
+        return normalized;
+    }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
