@@ -17,6 +17,7 @@ public class McpServerProperties {
     private Duration readTimeout = Duration.ofSeconds(10);
     private Duration requestTimeout = Duration.ofSeconds(30);
     private String instructions = "通过TPIP受控调用已经发布和授权的企业第三方业务能力。";
+    private boolean configuredToolsEnabled;
     private List<String> allowedOrigins = new ArrayList<>(List.of(
             "http://127.0.0.1:18083",
             "http://localhost:18083"));
@@ -37,6 +38,8 @@ public class McpServerProperties {
     public void setRequestTimeout(Duration requestTimeout) { this.requestTimeout = requestTimeout; }
     public String getInstructions() { return instructions; }
     public void setInstructions(String instructions) { this.instructions = instructions; }
+    public boolean isConfiguredToolsEnabled() { return configuredToolsEnabled; }
+    public void setConfiguredToolsEnabled(boolean configuredToolsEnabled) { this.configuredToolsEnabled = configuredToolsEnabled; }
     public List<String> getAllowedOrigins() { return allowedOrigins; }
     public void setAllowedOrigins(List<String> allowedOrigins) { this.allowedOrigins = allowedOrigins; }
     public LocalIdentity getLocalIdentity() { return localIdentity; }

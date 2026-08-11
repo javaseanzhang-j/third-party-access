@@ -56,6 +56,7 @@ class McpStreamableHttpEndToEndTest {
                     "--tpip.mcp.local-identity.application-code=member-center",
                     "--tpip.mcp.local-identity.app-key=tpip_member",
                     "--tpip.mcp.local-identity.secret-reference=env://TPIP_SECRET_TEST",
+                    "--tpip.mcp.configured-tools-enabled=true",
                     "--tpip.mcp.tools[0].tool-id=1",
                     "--tpip.mcp.tools[0].name=sms_send",
                     "--tpip.mcp.tools[0].title=发送业务短信",

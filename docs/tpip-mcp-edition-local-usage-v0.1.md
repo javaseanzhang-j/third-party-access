@@ -24,7 +24,7 @@ MCP Client
 4. 调用方应用已经获得该 `serviceCode` 的已发布服务授权。
 5. Control Plane和Runtime均已启动，默认示例地址分别为 `http://127.0.0.1:18082` 和 `http://127.0.0.1:18081`。
 
-如果服务未授权，Tool即使写入配置也不会出现在 `tools/list` 中；这是预期的安全收敛行为。
+如果服务未授权，Tool即使已经发布也不会出现在 `tools/list` 中；这是预期的安全收敛行为。Tool资产配置和发布流程见 [MCP Tool资产配置与发布指南 v0.2](./tpip-mcp-tool-asset-configuration-v0.2.md)。
 
 ## 3. 编写本地配置
 
@@ -42,37 +42,9 @@ tpip:
       tenant-id: local
       app-key: tpip_replace_with_real_app_key
       secret-reference: env://TPIP_MCP_LOCAL_APP_SECRET
-    tools:
-      - tool-id: 1
-        name: send_business_sms
-        title: 发送业务短信
-        description: 按平台路由规则选择已发布的短信通道并发送业务短信
-        service-code: notification.sms.send
-        fixed-scenario: verification-code
-        version-no: 1
-        read-only: false
-        destructive: false
-        idempotent: false
-        open-world: true
-        confirmation-mode: NONE
-        input-schema: >-
-          {"type":"object","additionalProperties":false,"required":["mobile","templateCode","parameters"],"properties":{"mobile":{"type":"string","description":"接收短信的手机号"},"templateCode":{"type":"string","description":"业务短信模板编码"},"parameters":{"type":"object","description":"模板变量"}}}
-        output-schema: >-
-          {"type":"object","properties":{"messageId":{"type":"string","description":"短信发送流水号"},"status":{"type":"string","description":"发送受理状态"}}}
 ```
 
-字段含义：
-
-| 字段 | 业务含义 |
-| --- | --- |
-| `name` | MCP Client实际调用的稳定工具名，建议使用英文小写和下划线 |
-| `title` | 用户看到的中文名称 |
-| `description` | 告诉AI和使用者该工具能做什么、不能做什么 |
-| `service-code` | TPIP业务标准服务编码，不是阿里云、腾讯云或华为云接口编码 |
-| `fixed-scenario` | 可选；强制使用固定业务场景，调用方不能覆盖 |
-| `input-schema` | 业务标准请求结构，不是第三方原始报文 |
-| `output-schema` | 业务标准返回结构，不是第三方原始报文 |
-| 风险提示字段 | 提示MCP Client是否只读、幂等、破坏性或访问外部系统；服务端授权仍是最终约束 |
+MCP Server默认从Control Plane读取最新已发布Tool快照，本地文件不再维护Tool定义。`configured-tools-enabled` 默认关闭，只有自动化测试和迁移排障才允许使用静态Tool配置。
 
 ## 4. 启动 MCP Server
 
@@ -120,7 +92,7 @@ http://127.0.0.1:18083/mcp
 
 ### 配置了Tool但客户端看不到
 
-优先检查该应用是否已经获得同一 `serviceCode` 的已发布授权，其次检查Tool名称、Schema和Control Plane地址。当前版本在启动时形成Tool快照，新增Tool、发布授权或撤销授权后需要重启MCP Server。
+优先检查Tool版本是否已经发布，再检查该应用是否已经获得同一 `serviceCode` 的已发布授权，最后检查Control Plane地址。当前版本在启动时形成Tool快照，发布Tool、发布授权或撤销授权后需要重启MCP Server。
 
 ### 为什么Tool不直接对应阿里云短信接口
 
@@ -132,4 +104,4 @@ MCP Tool对应业务能力 `notification.sms.send`。阿里云、腾讯云、华
 
 ## 7. 当前版本边界与下一步
 
-当前Tool定义保存在本地YAML，只是为了先验证MCP协议、授权交集和Runtime复用是否成立。下一阶段将把 `MCP Tool Asset` 和不可变版本写入Control Plane，并提供中文业务化UI，配置流程计划为“选择业务标准服务—填写工具说明—确认标准请求/返回—配置风险提示—验证—发布”，用户不再手写YAML或JSON Schema。
+当前Tool定义已经作为 `MCP Tool Asset` 和不可变版本写入Control Plane，并通过“创建Tool—创建版本—验证—发布”流程管理。下一步提供中文业务化UI，将JSON Schema编辑转换为字段表单和契约预览，并增加变更影响提示；在UI完成前可按资产配置指南调用Control Plane API。

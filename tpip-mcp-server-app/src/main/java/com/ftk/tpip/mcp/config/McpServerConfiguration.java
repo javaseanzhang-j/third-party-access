@@ -7,6 +7,7 @@ import com.ftk.tpip.mcp.application.McpServiceGrantSource;
 import com.ftk.tpip.mcp.application.McpToolCatalog;
 import com.ftk.tpip.mcp.application.McpToolGatewayService;
 import com.ftk.tpip.mcp.infrastructure.HttpConsumerServiceGrantSource;
+import com.ftk.tpip.mcp.infrastructure.HttpPublishedMcpToolSource;
 import com.ftk.tpip.mcp.infrastructure.SignedHttpRuntimePipeline;
 import com.ftk.tpip.mcp.model.McpClientIdentity;
 import com.ftk.tpip.mcp.model.McpToolDefinition;
@@ -50,7 +51,14 @@ public class McpServerConfiguration {
 
     @Bean
     List<McpToolDefinition> configuredMcpTools(McpServerProperties properties, ObjectMapper json) {
-        return new ConfiguredToolFactory(json).create(properties.getTools());
+        if (properties.isConfiguredToolsEnabled()) {
+            if (properties.getTools().isEmpty()) {
+                throw new IllegalStateException("configured-tools-enabled=true时必须配置至少一个MCP工具");
+            }
+            return new ConfiguredToolFactory(json).create(properties.getTools());
+        }
+        return new HttpPublishedMcpToolSource(properties.getControlPlaneBaseUri(),
+                properties.getConnectTimeout(), properties.getReadTimeout(), json).load();
     }
 
     @Bean

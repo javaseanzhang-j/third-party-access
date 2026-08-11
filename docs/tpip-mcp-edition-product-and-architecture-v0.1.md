@@ -397,4 +397,6 @@ v0.1只建设“MCP Tool管理”和“MCP调用测试”的最小查询与操�
 - 已补充模型、授权目录、Control Plane授权快照、Runtime签名调用、协议转换、安全校验和官方MCP客户端端到端测试；
 - 本地启用和验证方式见 [TPIP MCP Edition 本地使用指南 v0.1](./tpip-mcp-edition-local-usage-v0.1.md)。
 
-当前阶段仍有三项明确限制：MCP Tool定义暂由外部YAML提供，尚未进入Control Plane资产库和业务化UI；Tool与授权在MCP Server启动时形成快照，发布或授权变更后需要重启MCP Server；当前仅支持本机固定身份，不支持远程OAuth/OIDC客户端。下一阶段建设MCP Tool资产持久化、发布流程、查询模型和业务化配置界面。
+第二阶段后端资产闭环已完成：Control Plane新增MCP Tool稳定主资产和不可变版本、V54数据库迁移、JSON Schema规范化、风险规则验证、发布证据、查询API和最新发布快照；MCP Server默认读取Control Plane快照，本地静态Tool配置仅能通过显式测试开关启用。配置流程见 [MCP Tool资产配置与发布指南 v0.2](./tpip-mcp-tool-asset-configuration-v0.2.md)。
+
+当前仍有三项明确限制：中文业务化UI尚未建设；Tool与授权在MCP Server启动时形成快照，发布或授权变更后需要重启MCP Server；当前仅支持本机固定身份，不支持远程OAuth/OIDC客户端。下一段实施内容是MCP Tool前端查询模型与业务化配置工作台。

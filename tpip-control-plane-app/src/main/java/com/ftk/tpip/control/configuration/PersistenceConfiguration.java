@@ -4,6 +4,8 @@ import com.ftk.tpip.adapters.persistence.jdbc.provider.JdbcCredentialRefReposito
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAccessChannelRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.consumer.JdbcConsumerAccessRepository;
 import com.ftk.tpip.consumer.domain.repository.ConsumerAccessRepository;
+import com.ftk.tpip.adapters.persistence.jdbc.mcp.JdbcMcpToolAssetRepository;
+import com.ftk.tpip.mcp.domain.repository.McpToolAssetRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcProviderProductRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcCredentialProfileRepository;
 import com.ftk.tpip.adapters.persistence.jdbc.access.JdbcAuthenticationTemplateRepository;
@@ -123,6 +125,11 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class PersistenceConfiguration {
+
+    @Bean
+    McpToolAssetRepository mcpToolAssetRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcMcpToolAssetRepository(jdbcTemplate);
+    }
 
     @Bean
     ConsumerAccessRepository consumerAccessRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
