@@ -88,6 +88,42 @@ export function countSchemaFields(value: unknown): number {
   }, 0)
 }
 
+export function businessMessageFieldsFromSchema(value: unknown): BusinessMessageField[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const result: BusinessMessageField[] = []
+  flattenSchema(value as SchemaNode, '$', result)
+  return result
+}
+
+function flattenSchema(node: SchemaNode, parentPath: string, result: BusinessMessageField[]): void {
+  const properties = node.properties ?? {}
+  const required = new Set(node.required ?? [])
+  Object.entries(properties).forEach(([key, child]) => {
+    const path = `${parentPath}.${key}`
+    if (child.type === 'object' && child.properties && Object.keys(child.properties).length && !child.title) {
+      flattenSchema(child, path, result)
+      return
+    }
+    result.push({
+      path,
+      name: child.title?.trim() || child.description?.trim() || key,
+      type: fieldType(child.type),
+      required: required.has(key),
+      description: child.description ?? '',
+      example: child.example === undefined ? '' : typeof child.example === 'string'
+        ? child.example : JSON.stringify(child.example)
+    })
+  })
+}
+
+function fieldType(value: string): BusinessFieldType {
+  if (value === 'number' || value === 'integer') return 'NUMBER'
+  if (value === 'boolean') return 'BOOLEAN'
+  if (value === 'object') return 'OBJECT'
+  if (value === 'array') return 'ARRAY'
+  return 'STRING'
+}
+
 function schemaFor(field: BusinessMessageField): SchemaNode {
   const base: SchemaNode = { type: field.type.toLowerCase(), title: field.name.trim() }
   if (field.description.trim()) base.description = field.description.trim()

@@ -12,6 +12,7 @@ const activeMenu = computed(() => {
   if (route.path.startsWith('/integration-assets/interfaces')) return '/integration-assets/interfaces'
   if (route.path.startsWith('/integration-assets/services')) return '/integration-assets/services'
   if (route.path.startsWith('/integration-assets/consumers')) return '/integration-assets/consumers'
+  if (route.path.startsWith('/integration-assets/ai-tools')) return '/integration-assets/ai-tools'
   if (route.path.startsWith('/integration-assets/provider-contract-versions')) return '/integration-assets/provider-contract-versions'
   if (route.path.startsWith('/integration-assets/mappings')) return '/integration-assets/mappings'
   if (route.path.startsWith('/integration-assets/policies')) return '/integration-assets/policies'
@@ -56,6 +57,7 @@ const pageTitle = computed(() => String(route.meta.title ?? 'TPIP 工作台'))
           <template #title><span class="menu-dot menu-dot--service" /><span>服务管理</span></template>
           <el-menu-item index="/integration-assets/services">接入服务</el-menu-item>
           <el-menu-item index="/integration-assets/consumers">调用方管理</el-menu-item>
+          <el-menu-item index="/integration-assets/ai-tools">AI 工具开放</el-menu-item>
           <el-menu-item index="/integration-assets/runtime-invoke">统一调用控制台</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="verification-release">

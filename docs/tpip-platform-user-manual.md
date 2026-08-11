@@ -225,6 +225,7 @@ REMOTE_CALL Fixture 的 Control Plane 白名单和 Secret 环境变量要求见
 | `/integration-assets/channels` | 按“第三方 → 产品/服务”筛选通道，管理 baseUrl、凭据、公共参数和公共规则 |
 | `/integration-assets/interfaces` | 按第三方名称、接口名称、Method 和完整地址展示的第三方接口视图 |
 | `/integration-assets/services` | 创建 serviceCode、标准请求/返回、第三方实现，并配置版本化多目标路由和 Dry Run |
+| `/integration-assets/ai-tools` | 把已发布业务标准服务配置为 AI 可调用工具，确认业务字段、风险规则并验证发布 |
 | `/integration-assets/wizard` | 测试与发布进度、缺口定位、专家页面跳转和本地断点恢复 |
 | `/integration-assets/canonical` | Domain、Capability、Operation、Canonical Contract 与 Schema Version |
 | `/integration-assets/provider-contract-versions` | 第三方 Request/Response/Error/Callback Schema 版本 |
@@ -250,6 +251,8 @@ REMOTE_CALL Fixture 的 Control Plane 白名单和 Secret 环境变量要求见
 | `/drift-reminder-batches` | 提醒批次、替代、Outbox 和审计时间线 |
 
 UI 无登录。所有写命令携带本地审计 Operator，并使用 Row Version 防止覆盖并发修改。
+
+“服务管理 → AI 工具开放”面向业务使用者，不要求选择阿里云、腾讯云、华为云等具体厂商。先选择稳定的业务标准服务，平台自动读取其已发布标准请求和标准返回，以中文字段表单展示；再填写工具名称、调用编码、用途边界和风险规则，保存草稿后执行验证与发布。已发布版本不可修改，后续调整通过“创建新版本”完成。MCP Server只会暴露已发布工具与当前调用方已发布服务授权的交集。
 
 v0.23 将导航重构为“接入配置、服务管理、高级管理、运营治理”。普通入口使用第三方系统、接入通道、第三方接口、
 接入服务和 serviceCode 等产品术语；Domain、CanonicalContract、Mapping、Policy、BindingVersion 和 Bundle 等现有资产

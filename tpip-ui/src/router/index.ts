@@ -53,6 +53,12 @@ export const router = createRouter({
       component: () => import('@/features/integration-config/pages/ConsumerAccessPage.vue')
     },
     {
+      path: '/integration-assets/ai-tools',
+      name: 'mcp-tool-workbench',
+      meta: { title: 'AI 工具开放' },
+      component: () => import('@/features/integration-config/pages/McpToolWorkbenchPage.vue')
+    },
+    {
       path: '/integration-assets/canonical',
       name: 'canonical-assets',
       meta: { title: '业务标准接口' },

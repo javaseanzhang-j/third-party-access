@@ -47,6 +47,14 @@ class McpToolAssetApplicationServiceTest {
         assertTrue(service.validate(1, version.id()).ready());
         assertEquals(McpToolVersion.LifecycleStatus.PUBLISHED,
                 service.publish(1, version.id(), "sean").lifecycleStatus());
+        McpToolVersion nextDraft = service.createVersion(1,
+                new McpToolAssetApplicationService.CreateVersion("发送业务短信 v2", "增加业务返回说明",
+                        "login", json.createObjectNode().put("type", "object"),
+                        json.createObjectNode().put("type", "object"), false, false,
+                        false, true, McpToolVersion.ConfirmationMode.NONE), "sean");
+        var summary = service.tools().getFirst();
+        assertEquals(nextDraft.id(), summary.latestVersion().id());
+        assertEquals(version.id(), summary.latestPublishedVersion().id());
         var snapshot = service.publishedSnapshot();
         assertEquals("tpip.mcp-tools/v1", snapshot.apiVersion());
         assertEquals("notification.sms.send", snapshot.tools().getFirst().serviceCode());

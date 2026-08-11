@@ -128,9 +128,12 @@ public class McpToolAssetApplicationService {
 
     private ToolSummary summary(McpToolAsset asset) {
         var operation = operations.findById(asset.operationId()).orElse(null);
+        List<McpToolVersion> versions = tools.findVersions(asset.id());
         return new ToolSummary(asset, operation == null ? "unknown" : operation.operationCode().value(),
                 operation == null ? "业务标准服务不存在" : operation.operationName(),
-                tools.findVersions(asset.id()).stream().findFirst().orElse(null));
+                versions.stream().findFirst().orElse(null),
+                versions.stream().filter(value -> value.lifecycleStatus() == McpToolVersion.LifecycleStatus.PUBLISHED)
+                        .findFirst().orElse(null));
     }
 
     private McpToolAsset requiredTool(long id) {
@@ -183,7 +186,7 @@ public class McpToolAssetApplicationService {
             JsonNode inputSchema, JsonNode outputSchema, boolean readOnly, boolean destructive,
             boolean idempotent, boolean openWorld, McpToolVersion.ConfirmationMode confirmationMode) {}
     public record ToolSummary(McpToolAsset tool, String serviceCode, String serviceName,
-            McpToolVersion latestVersion) {}
+            McpToolVersion latestVersion, McpToolVersion latestPublishedVersion) {}
     public record ToolDetail(ToolSummary summary, List<McpToolVersion> versions) {}
     public record ValidationReport(boolean ready, List<String> issues) {}
     public record PublishedSnapshot(String apiVersion, Instant generatedAt, String checksum,

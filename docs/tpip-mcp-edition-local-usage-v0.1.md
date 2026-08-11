@@ -104,4 +104,4 @@ MCP Tool对应业务能力 `notification.sms.send`。阿里云、腾讯云、华
 
 ## 7. 当前版本边界与下一步
 
-当前Tool定义已经作为 `MCP Tool Asset` 和不可变版本写入Control Plane，并通过“创建Tool—创建版本—验证—发布”流程管理。下一步提供中文业务化UI，将JSON Schema编辑转换为字段表单和契约预览，并增加变更影响提示；在UI完成前可按资产配置指南调用Control Plane API。
+当前Tool定义已经作为 `MCP Tool Asset` 和不可变版本写入Control Plane，并可在“服务管理 → AI 工具开放”通过中文四步向导完成创建、业务字段确认、风险设置、验证和发布。Tool与授权仍在MCP Server启动时形成快照，发布Tool、发布授权或撤销授权后需要重启MCP Server；远程OAuth/OIDC客户端也尚未开放。
