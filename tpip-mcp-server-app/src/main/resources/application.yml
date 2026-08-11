@@ -14,6 +14,8 @@ tpip:
     connect-timeout: ${TPIP_MCP_CONNECT_TIMEOUT:1s}
     read-timeout: ${TPIP_MCP_READ_TIMEOUT:10s}
     request-timeout: ${TPIP_MCP_REQUEST_TIMEOUT:30s}
+    catalog-auto-refresh-enabled: ${TPIP_MCP_CATALOG_AUTO_REFRESH_ENABLED:true}
+    catalog-refresh-interval: ${TPIP_MCP_CATALOG_REFRESH_INTERVAL:30s}
     configured-tools-enabled: ${TPIP_MCP_CONFIGURED_TOOLS_ENABLED:false}
     allowed-origins:
       - http://127.0.0.1:${TPIP_MCP_PORT:18083}

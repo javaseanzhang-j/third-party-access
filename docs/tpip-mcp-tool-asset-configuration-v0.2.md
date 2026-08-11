@@ -136,7 +136,7 @@ X-Operator: sean
 GET /control/v1/mcp-tools/runtime-snapshot
 ```
 
-快照版本为 `tpip.mcp-tools/v1`，包含每个启用Tool的最新已发布版本。MCP Server启动时读取该快照，再与本地应用的已发布服务授权取交集，最终形成 `tools/list`。
+快照版本为 `tpip.mcp-tools/v1`，包含每个启用Tool的最新已发布版本。MCP Server启动时读取该快照，再与本地应用的已发布服务授权取交集，最终形成 `tools/list`。运行中默认每30秒原子刷新，也可以从“本地调用测试”手动刷新；成功后向已连接客户端发送 `tools/list_changed` 通知。
 
 ## 5. 查询接口
 
@@ -162,6 +162,6 @@ GET /control/v1/mcp-tools/runtime-snapshot
 ## 7. 当前边界
 
 - 中文业务化工作台已经完成，支持查询、创建、契约字段确认、风险设置、验证、发布和不可变版本历史。
-- Tool快照在MCP Server启动时加载；发布或撤销变化后需要重启MCP Server。
+- Tool快照和授权交集支持运行中自动/手动刷新；刷新失败保留上一份成功快照，无需重启MCP Server。
 - 当前没有Tool下线命令，紧急阻断仍可通过撤销调用方服务授权完成。
-- 工作台已从已发布 Canonical Contract 自动生成字段初稿，并提供契约变化影响分析和本地客户端配置参考。
+- 工作台已从已发布 Canonical Contract 自动生成字段初稿，并提供契约变化影响分析、本地客户端配置参考和真实调用测试台。

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/api/http'
 import AsyncStatePanel from '@/components/AsyncStatePanel.vue'
 import BusinessContractFieldEditor from '../components/BusinessContractFieldEditor.vue'
+import McpLocalTestConsole from '../components/McpLocalTestConsole.vue'
 import { canonicalAssetApi, type OperationAsset } from '../api/canonicalAssetApi'
 import { mcpToolAssetApi, type McpConfirmationMode, type McpToolDetail,
   type McpContractImpact, type McpContractImpactLevel, type McpToolSummary,
@@ -28,6 +29,7 @@ const validationReports = reactive<Record<number, McpToolValidationReport>>({})
 const impactReports = reactive<Record<number, McpContractImpact>>({})
 const impactLoading = reactive<Record<number, boolean>>({})
 const clientGuideVisible = ref(false)
+const testConsoleVisible = ref(false)
 const mcpEndpoint = computed(() => `http://${window.location.hostname || '127.0.0.1'}:18083/mcp`)
 const clientConfig = computed(() => JSON.stringify({ mcpServers: { 'tpip-local': { url: mcpEndpoint.value } } }, null, 2))
 
@@ -234,7 +236,7 @@ function confirmationText(value: McpConfirmationMode): string {
   <section class="mcp-workbench">
     <div class="page-heading">
       <div><h2>AI 工具开放</h2><p>把已经稳定运行的业务标准服务，按授权开放给 AI 助手使用。</p></div>
-      <div class="heading-actions"><el-button size="large" @click="clientGuideVisible = true">客户端接入</el-button><el-button class="mcp-create-button" type="primary" size="large" @click="openCreate">＋ 开放新的 AI 工具</el-button></div>
+      <div class="heading-actions"><el-button size="large" @click="testConsoleVisible = true">本地调用测试</el-button><el-button size="large" @click="clientGuideVisible = true">客户端接入</el-button><el-button class="mcp-create-button" type="primary" size="large" @click="openCreate">＋ 开放新的 AI 工具</el-button></div>
     </div>
     <el-alert type="info" :closable="false" show-icon title="AI 只看到业务工具，不会看到阿里云、腾讯云、华为云等具体通道；厂商选择、故障切换和字段转换仍由 TPIP 处理。" />
     <div class="metric-strip mcp-metrics">
@@ -296,9 +298,10 @@ function confirmationText(value: McpConfirmationMode): string {
 
     <el-dialog v-model="clientGuideVisible" title="连接本地 AI 客户端" width="min(720px, calc(100vw - 32px))">
       <el-steps :active="3" finish-status="success" simple><el-step title="发布工具" /><el-step title="授权业务服务" /><el-step title="启动 MCP 服务" /></el-steps>
-      <div class="client-guide"><el-alert type="info" :closable="false" title="客户端只连接 MCP 服务，不需要保存 TPIP 的 appKey 或 Secret；本机 MCP 服务负责身份映射和签名。" /><label>本地 MCP 地址</label><code>{{ mcpEndpoint }}</code><label>通用 Streamable HTTP 配置参考</label><el-input :model-value="clientConfig" type="textarea" :rows="7" readonly /><el-button type="primary" @click="copyClientConfig">复制配置</el-button><p>不同客户端的配置文件名称可能不同，但服务器名称和 URL 含义相同。发布工具或调整授权后，请重启 MCP 服务，再让客户端刷新工具列表。</p></div>
+      <div class="client-guide"><el-alert type="info" :closable="false" title="客户端只连接 MCP 服务，不需要保存 TPIP 的 appKey 或 Secret；本机 MCP 服务负责身份映射和签名。" /><label>本地 MCP 地址</label><code>{{ mcpEndpoint }}</code><label>通用 Streamable HTTP 配置参考</label><el-input :model-value="clientConfig" type="textarea" :rows="7" readonly /><el-button type="primary" @click="copyClientConfig">复制配置</el-button><p>不同客户端的配置文件名称可能不同，但服务器名称和 URL 含义相同。发布工具或调整授权后，可等待自动刷新，或在“本地调用测试”中立即刷新目录，无需重启 MCP 服务。</p></div>
       <template #footer><el-button @click="clientGuideVisible = false">关闭</el-button></template>
     </el-dialog>
+    <McpLocalTestConsole v-model="testConsoleVisible" />
   </section>
 </template>
 

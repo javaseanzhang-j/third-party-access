@@ -2,6 +2,7 @@ package com.ftk.tpip.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ftk.tpip.contract.InvocationRequest;
@@ -16,9 +17,14 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
@@ -29,7 +35,8 @@ class McpStreamableHttpEndToEndTest {
     @Test
     void exposesAuthorizedToolOverStreamableHttpAndCallsRuntime() throws Exception {
         ObjectMapper json = new ObjectMapper().findAndRegisterModules();
-        HttpServer control = controlPlane();
+        AtomicInteger toolVersion = new AtomicInteger(1);
+        HttpServer control = controlPlane(toolVersion);
         HttpServer runtime = runtime(json);
         control.start();
         runtime.start();
@@ -56,15 +63,7 @@ class McpStreamableHttpEndToEndTest {
                     "--tpip.mcp.local-identity.application-code=member-center",
                     "--tpip.mcp.local-identity.app-key=tpip_member",
                     "--tpip.mcp.local-identity.secret-reference=env://TPIP_SECRET_TEST",
-                    "--tpip.mcp.configured-tools-enabled=true",
-                    "--tpip.mcp.tools[0].tool-id=1",
-                    "--tpip.mcp.tools[0].name=sms_send",
-                    "--tpip.mcp.tools[0].title=发送业务短信",
-                    "--tpip.mcp.tools[0].description=向指定手机号码发送业务短信",
-                    "--tpip.mcp.tools[0].service-code=sms.send",
-                    "--tpip.mcp.tools[0].fixed-scenario=login-verification",
-                    "--tpip.mcp.tools[0].input-schema={\"type\":\"object\",\"properties\":{\"mobile\":{\"type\":\"string\"}}}",
-                    "--tpip.mcp.tools[0].output-schema={\"type\":\"object\",\"properties\":{\"messageId\":{\"type\":\"string\"}}}");
+                    "--tpip.mcp.catalog-auto-refresh-enabled=false");
             int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
 
             var transport = HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + port)
@@ -77,7 +76,8 @@ class McpStreamableHttpEndToEndTest {
                     .requestTimeout(Duration.ofSeconds(3))
                     .initializationTimeout(Duration.ofSeconds(3))
                     .build()) {
-                client.initialize();
+                McpSchema.InitializeResult initialization = client.initialize();
+                assertTrue(initialization.capabilities().tools().listChanged());
                 assertEquals("sms_send", client.listTools().tools().getFirst().name());
 
                 McpSchema.CallToolResult result = client.callTool(
@@ -85,6 +85,13 @@ class McpStreamableHttpEndToEndTest {
 
                 assertFalse(result.isError());
                 assertEquals("sms-1", ((Map<?, ?>) result.structuredContent()).get("messageId"));
+
+                toolVersion.set(2);
+                HttpResponse<String> refresh = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                                URI.create("http://127.0.0.1:" + port + "/mcp-local/v1/catalog:refresh"))
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, refresh.statusCode());
+                assertEquals(2, client.listTools().tools().getFirst().meta().get("tpip/version"));
             }
         } finally {
             if (context != null) {
@@ -95,7 +102,7 @@ class McpStreamableHttpEndToEndTest {
         }
     }
 
-    private static HttpServer controlPlane() throws Exception {
+    private static HttpServer controlPlane(AtomicInteger toolVersion) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/control/v1/consumer-access/runtime-snapshot", exchange -> {
             byte[] body = """
@@ -103,6 +110,23 @@ class McpStreamableHttpEndToEndTest {
                       {"applicationId":7,"appKey":"tpip_member","serviceCode":"sms.send"}
                     ]}
                     """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.createContext("/control/v1/mcp-tools/runtime-snapshot", exchange -> {
+            int version = toolVersion.get();
+            byte[] body = ("""
+                    {"apiVersion":"tpip.mcp-tools/v1","tools":[{
+                      "toolId":1,"toolName":"sms_send","title":"发送业务短信","description":"向指定手机号码发送业务短信",
+                      "serviceCode":"sms.send","fixedScenario":"login-verification","versionNo":%d,
+                      "inputSchema":"{\\"type\\":\\"object\\",\\"properties\\":{\\"mobile\\":{\\"type\\":\\"string\\"}}}",
+                      "outputSchema":"{\\"type\\":\\"object\\",\\"properties\\":{\\"messageId\\":{\\"type\\":\\"string\\"}}}",
+                      "readOnly":false,"destructive":false,"idempotent":false,"openWorld":true,
+                      "confirmationMode":"REQUIRED","contentChecksum":"checksum-%d"
+                    }]}
+                    """).formatted(version, version).getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);

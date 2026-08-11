@@ -2,6 +2,7 @@ package com.ftk.tpip.mcp.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ftk.tpip.mcp.application.McpToolDefinitionSource;
 import com.ftk.tpip.mcp.model.McpToolAnnotations;
 import com.ftk.tpip.mcp.model.McpToolDefinition;
 import java.net.URI;
@@ -12,7 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class HttpPublishedMcpToolSource {
+public final class HttpPublishedMcpToolSource implements McpToolDefinitionSource {
 
     private final URI endpoint;
     private final HttpClient http;
@@ -27,6 +28,7 @@ public final class HttpPublishedMcpToolSource {
         this.json = json;
     }
 
+    @Override
     public List<McpToolDefinition> load() {
         try {
             HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(readTimeout).GET().build();

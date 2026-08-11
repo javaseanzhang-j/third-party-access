@@ -23,6 +23,7 @@ export default defineConfig({
       '/control': { target: 'http://127.0.0.1:18082', changeOrigin: false },
       '/actuator': { target: 'http://127.0.0.1:18082', changeOrigin: false },
       '/runtime-config': { target: 'http://127.0.0.1:18082', changeOrigin: false },
+      '/mcp-local': { target: 'http://127.0.0.1:18083', changeOrigin: false },
       '^/integration/': { target: 'http://127.0.0.1:18081', changeOrigin: false }
     }
   },

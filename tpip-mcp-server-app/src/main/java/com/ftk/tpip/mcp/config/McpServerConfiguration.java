@@ -3,7 +3,10 @@ package com.ftk.tpip.mcp.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ftk.tpip.adapters.runtime.EnvironmentSecretResolver;
 import com.ftk.tpip.mcp.application.AuthorizedMcpToolCatalog;
+import com.ftk.tpip.mcp.application.McpCatalogRefreshScheduler;
+import com.ftk.tpip.mcp.application.McpRuntimeCatalogRefresher;
 import com.ftk.tpip.mcp.application.McpServiceGrantSource;
+import com.ftk.tpip.mcp.application.McpToolDefinitionSource;
 import com.ftk.tpip.mcp.application.McpToolCatalog;
 import com.ftk.tpip.mcp.application.McpToolGatewayService;
 import com.ftk.tpip.mcp.infrastructure.HttpConsumerServiceGrantSource;
@@ -32,10 +35,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
 @EnableConfigurationProperties(McpServerProperties.class)
 @ConditionalOnProperty(prefix = "tpip.mcp", name = "enabled", havingValue = "true")
+@EnableScheduling
 public class McpServerConfiguration {
 
     @Bean
@@ -50,15 +55,16 @@ public class McpServerConfiguration {
     }
 
     @Bean
-    List<McpToolDefinition> configuredMcpTools(McpServerProperties properties, ObjectMapper json) {
+    McpToolDefinitionSource mcpToolDefinitionSource(McpServerProperties properties, ObjectMapper json) {
         if (properties.isConfiguredToolsEnabled()) {
             if (properties.getTools().isEmpty()) {
                 throw new IllegalStateException("configured-tools-enabled=true时必须配置至少一个MCP工具");
             }
-            return new ConfiguredToolFactory(json).create(properties.getTools());
+            List<McpToolDefinition> configured = new ConfiguredToolFactory(json).create(properties.getTools());
+            return () -> configured;
         }
         return new HttpPublishedMcpToolSource(properties.getControlPlaneBaseUri(),
-                properties.getConnectTimeout(), properties.getReadTimeout(), json).load();
+                properties.getConnectTimeout(), properties.getReadTimeout(), json);
     }
 
     @Bean
@@ -72,8 +78,8 @@ public class McpServerConfiguration {
     }
 
     @Bean
-    McpToolCatalog mcpToolCatalog(List<McpToolDefinition> configuredMcpTools, McpServiceGrantSource grants) {
-        return new AuthorizedMcpToolCatalog(configuredMcpTools, grants);
+    AuthorizedMcpToolCatalog mcpToolCatalog(McpToolDefinitionSource source, McpServiceGrantSource grants) {
+        return new AuthorizedMcpToolCatalog(source.load(), grants);
     }
 
     @Bean
@@ -150,10 +156,23 @@ public class McpServerConfiguration {
         return McpServer.sync(transport)
                 .serverInfo("tpip-mcp-server", "0.1.0")
                 .instructions(properties.getInstructions())
-                .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
+                .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .validateToolInputs(true)
                 .tools(tools.specifications())
                 .build();
+    }
+
+    @Bean
+    McpRuntimeCatalogRefresher mcpRuntimeCatalogRefresher(McpToolDefinitionSource source,
+            AuthorizedMcpToolCatalog catalog, McpProtocolToolAdapter tools, McpSyncServer server) {
+        return new McpRuntimeCatalogRefresher(source, catalog, tools, server, Clock.systemUTC());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "tpip.mcp", name = "catalog-auto-refresh-enabled",
+            havingValue = "true", matchIfMissing = true)
+    McpCatalogRefreshScheduler mcpCatalogRefreshScheduler(McpRuntimeCatalogRefresher refresher) {
+        return new McpCatalogRefreshScheduler(refresher);
     }
 
     private static String normalizedRequestId(String candidate) {

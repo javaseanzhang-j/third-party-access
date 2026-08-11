@@ -24,6 +24,10 @@ class AuthorizedMcpToolCatalogTest {
         assertEquals(List.of("sms_send"), catalog.publishedToolsFor(identity).stream()
                 .map(McpToolDefinition::toolName)
                 .toList());
+
+        catalog.replaceTools(List.of(tool(3, "email_send", "email.send")));
+        assertEquals(List.of(), catalog.publishedToolsFor(identity));
+        assertEquals("email_send", catalog.configuredTools().getFirst().toolName());
     }
 
     private McpToolDefinition tool(long id, String name, String serviceCode) {

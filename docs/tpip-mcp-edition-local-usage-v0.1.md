@@ -36,6 +36,8 @@ tpip:
     enabled: true
     runtime-base-uri: http://127.0.0.1:18081
     control-plane-base-uri: http://127.0.0.1:18082
+    catalog-auto-refresh-enabled: true
+    catalog-refresh-interval: 30s
     local-identity:
       application-id: 1001
       application-code: local-ai-assistant
@@ -44,7 +46,7 @@ tpip:
       secret-reference: env://TPIP_MCP_LOCAL_APP_SECRET
 ```
 
-MCP Server默认从Control Plane读取最新已发布Tool快照，本地文件不再维护Tool定义。`configured-tools-enabled` 默认关闭，只有自动化测试和迁移排障才允许使用静态Tool配置。
+MCP Server默认从Control Plane读取最新已发布Tool快照，本地文件不再维护Tool定义。运行中默认每30秒原子刷新一次“已发布工具与当前应用授权”的交集；刷新失败会继续保留上一份可用快照。`configured-tools-enabled` 默认关闭，只有自动化测试和迁移排障才允许使用静态Tool配置。
 
 ## 4. 启动 MCP Server
 
@@ -74,6 +76,16 @@ http://127.0.0.1:18083/mcp
 
 也可以在 TPIP UI 打开“服务管理 → AI 工具开放”，点击右上角“客户端接入”，复制本机地址和通用 Streamable HTTP 配置参考。该入口同时提示完整前置顺序：发布工具、授权业务服务、启动 MCP 服务。
 
+同一页面的“本地调用测试”用于正式连接客户端前联调：
+
+1. 查看当前本地应用身份、目录更新时间和可调用工具数量；
+2. 点击“立即刷新目录”，无需重启MCP Server即可吸收新发布Tool或授权变化；
+3. 选择当前应用真正有权调用的工具，平台按输入Schema生成参数示例；
+4. 检查并修改参数，必要时填写业务场景和幂等键；
+5. 确认后发起真实调用并查看标准结果和requestId。
+
+这不是Mock或Dry Run。调用仍经过服务授权、Runtime、已发布Bundle、路由、Mapping和Policy，并可能真实访问第三方。该测试入口额外校验请求来源，只允许本机回环地址访问。
+
 在支持Streamable HTTP的MCP Client中增加一个服务器，URL填写：
 
 ```text
@@ -94,7 +106,7 @@ http://127.0.0.1:18083/mcp
 
 ### 配置了Tool但客户端看不到
 
-优先检查Tool版本是否已经发布，再检查该应用是否已经获得同一 `serviceCode` 的已发布授权，最后检查Control Plane地址。当前版本在启动时形成Tool快照，发布Tool、发布授权或撤销授权后需要重启MCP Server。
+优先检查Tool版本是否已经发布，再检查该应用是否已经获得同一 `serviceCode` 的已发布授权，最后检查Control Plane地址。在“AI 工具开放”中点击“本地调用测试 → 立即刷新目录”，或等待默认30秒自动刷新；不需要重启MCP Server。若刷新失败，页面会显示失败时间和原因，同时上一份成功快照继续可用。
 
 ### 为什么Tool不直接对应阿里云短信接口
 
@@ -106,4 +118,6 @@ MCP Tool对应业务能力 `notification.sms.send`。阿里云、腾讯云、华
 
 ## 7. 当前版本边界与下一步
 
-当前Tool定义已经作为 `MCP Tool Asset` 和不可变版本写入Control Plane，并可在“服务管理 → AI 工具开放”通过中文四步向导完成创建、业务字段确认、风险设置、验证和发布。Tool与授权仍在MCP Server启动时形成快照，发布Tool、发布授权或撤销授权后需要重启MCP Server；远程OAuth/OIDC客户端也尚未开放。
+当前Tool定义已经作为 `MCP Tool Asset` 和不可变版本写入Control Plane，并可在“服务管理 → AI 工具开放”通过中文四步向导完成创建、业务字段确认、风险设置、验证和发布。Tool与授权支持运行中自动/手动刷新和MCP `tools/list_changed` 通知，本地工作台支持授权发现与真实调用验证；远程OAuth/OIDC客户端尚未开放。
+
+可用环境变量：`TPIP_MCP_CATALOG_AUTO_REFRESH_ENABLED` 控制自动刷新，默认 `true`；`TPIP_MCP_CATALOG_REFRESH_INTERVAL` 控制周期，默认 `30s`。
