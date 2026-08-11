@@ -24,6 +24,7 @@
         <module>tpip-adapters</module>
         <module>tpip-control-plane-app</module>
         <module>tpip-runtime-app</module>
+        <module>tpip-mcp-server-app</module>
         <module>tpip-worker-app</module>
         <module>tpip-test-kit</module>
     </modules>
