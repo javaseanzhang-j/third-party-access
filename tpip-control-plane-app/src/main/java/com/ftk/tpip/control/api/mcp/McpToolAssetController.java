@@ -7,6 +7,8 @@ import com.ftk.tpip.control.application.mcp.McpToolAssetApplicationService.Publi
 import com.ftk.tpip.control.application.mcp.McpToolAssetApplicationService.ToolDetail;
 import com.ftk.tpip.control.application.mcp.McpToolAssetApplicationService.ToolSummary;
 import com.ftk.tpip.control.application.mcp.McpToolAssetApplicationService.ValidationReport;
+import com.ftk.tpip.control.application.mcp.McpToolContractImpactService;
+import com.ftk.tpip.control.application.mcp.McpToolContractImpactService.ContractImpact;
 import com.ftk.tpip.mcp.domain.model.McpToolVersion;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -32,9 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class McpToolAssetController {
 
     private final McpToolAssetApplicationService service;
+    private final McpToolContractImpactService impacts;
 
-    public McpToolAssetController(McpToolAssetApplicationService service) {
+    public McpToolAssetController(McpToolAssetApplicationService service, McpToolContractImpactService impacts) {
         this.service = service;
+        this.impacts = impacts;
     }
 
     @GetMapping
@@ -78,6 +82,12 @@ public class McpToolAssetController {
             @PathVariable @Positive long versionId,
             @RequestHeader("X-Operator") @NotBlank @Size(max = 100) String actor) {
         return service.publish(toolId, versionId, actor);
+    }
+
+    @GetMapping("/{toolId}/versions/{versionId}/contract-impact")
+    public ContractImpact contractImpact(@PathVariable @Positive long toolId,
+            @PathVariable @Positive long versionId) {
+        return impacts.analyze(toolId, versionId);
     }
 
     @GetMapping("/runtime-snapshot")

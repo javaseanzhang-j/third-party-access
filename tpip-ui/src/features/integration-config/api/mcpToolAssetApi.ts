@@ -53,6 +53,31 @@ export interface McpToolDetail {
 }
 
 export interface McpToolValidationReport { ready: boolean; issues: string[] }
+export type McpContractImpactLevel = 'CURRENT' | 'ADDITIVE' | 'BREAKING' | 'UNAVAILABLE'
+export interface McpContractSource {
+  contractId: number
+  contractName: string
+  versionId: number
+  versionNo: number
+  semanticVersion: string
+  contentChecksum: string
+}
+export interface McpSchemaChange {
+  level: 'ADDITIVE' | 'BREAKING'
+  direction: '请求' | '返回'
+  path: string
+  message: string
+}
+export interface McpContractImpact {
+  toolId: number
+  toolVersionId: number
+  toolVersionNo: number
+  level: McpContractImpactLevel
+  requestContract: McpContractSource | null
+  responseContract: McpContractSource | null
+  changes: McpSchemaChange[]
+  issues: string[]
+}
 
 export interface CreateMcpToolInput {
   operationId: number
@@ -86,6 +111,8 @@ export const mcpToolAssetApi = {
     postJson<McpToolVersion>(`/control/v1/mcp-tools/${toolId}/versions`, input, headers),
   validateVersion: (toolId: number, versionId: number) =>
     postJson<McpToolValidationReport>(`/control/v1/mcp-tools/${toolId}/versions/${versionId}:validate`, {}),
+  contractImpact: (toolId: number, versionId: number, signal?: AbortSignal) =>
+    getJson<McpContractImpact>(`/control/v1/mcp-tools/${toolId}/versions/${versionId}/contract-impact`, signal),
   publishVersion: (toolId: number, versionId: number) =>
     postJson<McpToolVersion>(`/control/v1/mcp-tools/${toolId}/versions/${versionId}:publish`, {}, headers)
 }

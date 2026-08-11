@@ -72,6 +72,8 @@ http://127.0.0.1:18083/mcp
 
 ## 5. MCP Client配置
 
+也可以在 TPIP UI 打开“服务管理 → AI 工具开放”，点击右上角“客户端接入”，复制本机地址和通用 Streamable HTTP 配置参考。该入口同时提示完整前置顺序：发布工具、授权业务服务、启动 MCP 服务。
+
 在支持Streamable HTTP的MCP Client中增加一个服务器，URL填写：
 
 ```text

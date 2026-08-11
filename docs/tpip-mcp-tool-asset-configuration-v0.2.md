@@ -36,6 +36,17 @@ Flyway `V54__mcp_tool_assets.sql` 新增：
 
 列表页展示最新版本和最新已发布版本，两者不同时表示“线上仍使用旧发布版本，同时存在一个新草稿”。已发布版本只读，继续调整必须点击“创建新版本”。AI 只看到业务工具，不会看到具体第三方厂商或通道。
 
+工具详情中的“检查契约变化”会把指定工具版本与业务服务最新已发布的标准请求、标准返回契约比较：
+
+| 结果 | 含义 | 建议动作 |
+| --- | --- | --- |
+| 与最新业务契约一致 | 字段、类型和必填约束没有变化 | 无需处理 |
+| 发现可兼容新增 | 新增选填字段、返回字段或放宽必填约束 | 可按需要创建新版本同步 |
+| 存在不兼容变化 | 删除已有字段、改变字段类型或新增请求必填字段 | 创建工具新版本并重新验证发布 |
+| 暂时无法分析 | 缺少已发布请求/返回契约 | 先完善业务标准契约 |
+
+分析只读取已发布 Canonical Contract 和不可变 Tool Version，不读取第三方原始报文、Secret、设计态 Mapping 或 Policy。
+
 ## 4. API配置流程
 
 ### 第一步：选择业务标准服务并创建Tool
@@ -133,6 +144,7 @@ GET /control/v1/mcp-tools/runtime-snapshot
 | --- | --- |
 | `GET /control/v1/mcp-tools` | Tool列表和最新版本摘要 |
 | `GET /control/v1/mcp-tools/{toolId}` | Tool详情与完整版本历史 |
+| `GET /control/v1/mcp-tools/{toolId}/versions/{versionId}/contract-impact` | 指定不可变版本与最新业务契约的兼容性分析 |
 | `GET /control/v1/mcp-tools/runtime-snapshot` | MCP Server只读发布快照 |
 
 ## 6. 风险字段解释
@@ -152,4 +164,4 @@ GET /control/v1/mcp-tools/runtime-snapshot
 - 中文业务化工作台已经完成，支持查询、创建、契约字段确认、风险设置、验证、发布和不可变版本历史。
 - Tool快照在MCP Server启动时加载；发布或撤销变化后需要重启MCP Server。
 - 当前没有Tool下线命令，紧急阻断仍可通过撤销调用方服务授权完成。
-- 工作台已从已发布 Canonical Contract 自动生成字段初稿；契约变更影响分析和客户端配置生成属于后续内容。
+- 工作台已从已发布 Canonical Contract 自动生成字段初稿，并提供契约变化影响分析和本地客户端配置参考。

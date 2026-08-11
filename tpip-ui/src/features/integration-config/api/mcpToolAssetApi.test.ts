@@ -20,4 +20,15 @@ describe('mcp tool asset api', () => {
     expect(calls[1]?.[0]).toBe('/control/v1/mcp-tools/3/versions/8:publish')
     expect(new Headers(calls[1]?.[1]?.headers).get('X-Operator')).toBeTruthy()
   })
+
+  it('reads contract impact for a concrete immutable tool version', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({
+      level: 'CURRENT', changes: [], issues: []
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mcpToolAssetApi.contractImpact(7, 19)
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/control/v1/mcp-tools/7/versions/19/contract-impact')
+  })
 })

@@ -7,7 +7,8 @@ import AsyncStatePanel from '@/components/AsyncStatePanel.vue'
 import BusinessContractFieldEditor from '../components/BusinessContractFieldEditor.vue'
 import { canonicalAssetApi, type OperationAsset } from '../api/canonicalAssetApi'
 import { mcpToolAssetApi, type McpConfirmationMode, type McpToolDetail,
-  type McpToolSummary, type McpToolValidationReport, type McpToolVersion } from '../api/mcpToolAssetApi'
+  type McpContractImpact, type McpContractImpactLevel, type McpToolSummary,
+  type McpToolValidationReport, type McpToolVersion } from '../api/mcpToolAssetApi'
 import { buildBusinessMessageSchema, businessMessageFieldsFromSchema,
   type BusinessMessageField } from '../model/businessMessageSchema'
 
@@ -24,6 +25,11 @@ const errorMessage = ref('')
 const requestFields = ref<BusinessMessageField[]>([])
 const responseFields = ref<BusinessMessageField[]>([])
 const validationReports = reactive<Record<number, McpToolValidationReport>>({})
+const impactReports = reactive<Record<number, McpContractImpact>>({})
+const impactLoading = reactive<Record<number, boolean>>({})
+const clientGuideVisible = ref(false)
+const mcpEndpoint = computed(() => `http://${window.location.hostname || '127.0.0.1'}:18083/mcp`)
+const clientConfig = computed(() => JSON.stringify({ mcpServers: { 'tpip-local': { url: mcpEndpoint.value } } }, null, 2))
 
 const toolsQuery = useQuery({ queryKey: ['mcp-tool-assets'], queryFn: ({ signal }) => mcpToolAssetApi.tools(signal) })
 const operationsQuery = useQuery({ queryKey: ['canonical-operations'], queryFn: ({ signal }) => canonicalAssetApi.operations(undefined, signal) })
@@ -180,6 +186,23 @@ async function validateVersion(version: McpToolVersion): Promise<void> {
     report.ready ? ElMessage.success('发布前检查通过') : ElMessage.warning(report.issues.join('；'))
   } catch (error) { ElMessage.error(apiMessage(error)) }
 }
+async function loadContractImpact(version: McpToolVersion): Promise<void> {
+  if (!selectedDetail.value) return
+  impactLoading[version.id] = true
+  try { impactReports[version.id] = await mcpToolAssetApi.contractImpact(selectedDetail.value.summary.tool.id, version.id) }
+  catch (error) { ElMessage.error(apiMessage(error)) }
+  finally { impactLoading[version.id] = false }
+}
+function impactText(level: McpContractImpactLevel): string {
+  return { CURRENT: '与最新业务契约一致', ADDITIVE: '发现可兼容新增', BREAKING: '存在不兼容变化', UNAVAILABLE: '暂时无法分析' }[level]
+}
+function impactType(level: McpContractImpactLevel): 'success' | 'warning' | 'error' | 'info' {
+  return { CURRENT: 'success', ADDITIVE: 'warning', BREAKING: 'error', UNAVAILABLE: 'info' }[level] as 'success' | 'warning' | 'error' | 'info'
+}
+async function copyClientConfig(): Promise<void> {
+  try { await navigator.clipboard.writeText(clientConfig.value); ElMessage.success('客户端配置已复制') }
+  catch { ElMessage.warning('浏览器未允许复制，请手动选择配置内容') }
+}
 async function publishVersion(version: McpToolVersion): Promise<void> {
   if (!selectedDetail.value) return
   try {
@@ -211,7 +234,7 @@ function confirmationText(value: McpConfirmationMode): string {
   <section class="mcp-workbench">
     <div class="page-heading">
       <div><h2>AI 工具开放</h2><p>把已经稳定运行的业务标准服务，按授权开放给 AI 助手使用。</p></div>
-      <el-button class="mcp-create-button" type="primary" size="large" @click="openCreate">＋ 开放新的 AI 工具</el-button>
+      <div class="heading-actions"><el-button size="large" @click="clientGuideVisible = true">客户端接入</el-button><el-button class="mcp-create-button" type="primary" size="large" @click="openCreate">＋ 开放新的 AI 工具</el-button></div>
     </div>
     <el-alert type="info" :closable="false" show-icon title="AI 只看到业务工具，不会看到阿里云、腾讯云、华为云等具体通道；厂商选择、故障切换和字段转换仍由 TPIP 处理。" />
     <div class="metric-strip mcp-metrics">
@@ -251,11 +274,34 @@ function confirmationText(value: McpConfirmationMode): string {
     </el-dialog>
 
     <el-drawer :model-value="selectedDetail !== null" title="AI工具详情" size="900px" @close="selectedDetail = null">
-      <template v-if="selectedDetail"><div class="mcp-detail-hero"><span>{{ selectedDetail.summary.serviceName }}</span><h3>{{ selectedDetail.summary.tool.displayName }}</h3><code>{{ selectedDetail.summary.tool.toolName }} → {{ selectedDetail.summary.serviceCode }}</code><p>{{ selectedDetail.summary.tool.description }}</p></div><div class="asset-toolbar"><div><strong>工具版本</strong><span>历史发布版本只读保留；只有最新已发布版本进入MCP快照。</span></div><el-button type="primary" @click="openRevision(selectedDetail.summary)">创建新版本</el-button></div><el-empty v-if="!selectedDetail.versions.length" description="尚未创建工具版本" /><div v-for="version in selectedDetail.versions" :key="version.id" class="version-card"><div class="version-card__head"><div><el-tag :type="version.lifecycleStatus === 'PUBLISHED' ? 'success' : 'warning'">第 {{ version.versionNo }} 版 · {{ version.lifecycleStatus === 'PUBLISHED' ? '已发布' : '草稿' }}</el-tag><strong>{{ version.title }}</strong></div><div v-if="version.lifecycleStatus === 'DRAFT'"><el-button @click="validateVersion(version)">发布前检查</el-button><el-button type="primary" :loading="busy" @click="publishVersion(version)">发布</el-button></div></div><p>{{ version.description }}</p><div class="version-facts"><span>固定场景：{{ version.fixedScenario || '无' }}</span><span>确认方式：{{ confirmationText(version.confirmationMode) }}</span><span>外部访问：{{ version.openWorld ? '是' : '否' }}</span><span>安全重试：{{ version.idempotent ? '是' : '否' }}</span></div><el-alert v-if="validationReports[version.id]" :type="validationReports[version.id]!.ready ? 'success' : 'warning'" :closable="false" :title="validationReports[version.id]!.ready ? '发布前检查通过' : validationReports[version.id]!.issues.join('；')" /><small class="checksum">内容校验值 {{ version.contentChecksum }}</small></div></template>
+      <template v-if="selectedDetail">
+        <div class="mcp-detail-hero"><span>{{ selectedDetail.summary.serviceName }}</span><h3>{{ selectedDetail.summary.tool.displayName }}</h3><code>{{ selectedDetail.summary.tool.toolName }} → {{ selectedDetail.summary.serviceCode }}</code><p>{{ selectedDetail.summary.tool.description }}</p></div>
+        <div class="asset-toolbar"><div><strong>工具版本</strong><span>历史发布版本只读保留；只有最新已发布版本进入MCP快照。</span></div><el-button type="primary" @click="openRevision(selectedDetail.summary)">创建新版本</el-button></div>
+        <el-empty v-if="!selectedDetail.versions.length" description="尚未创建工具版本" />
+        <div v-for="version in selectedDetail.versions" :key="version.id" class="version-card">
+          <div class="version-card__head"><div><el-tag :type="version.lifecycleStatus === 'PUBLISHED' ? 'success' : 'warning'">第 {{ version.versionNo }} 版 · {{ version.lifecycleStatus === 'PUBLISHED' ? '已发布' : '草稿' }}</el-tag><strong>{{ version.title }}</strong></div><div class="version-actions"><el-button :loading="impactLoading[version.id]" @click="loadContractImpact(version)">检查契约变化</el-button><template v-if="version.lifecycleStatus === 'DRAFT'"><el-button @click="validateVersion(version)">发布前检查</el-button><el-button type="primary" :loading="busy" @click="publishVersion(version)">发布</el-button></template></div></div>
+          <p>{{ version.description }}</p>
+          <div class="version-facts"><span>固定场景：{{ version.fixedScenario || '无' }}</span><span>确认方式：{{ confirmationText(version.confirmationMode) }}</span><span>外部访问：{{ version.openWorld ? '是' : '否' }}</span><span>安全重试：{{ version.idempotent ? '是' : '否' }}</span></div>
+          <el-alert v-if="validationReports[version.id]" :type="validationReports[version.id]!.ready ? 'success' : 'warning'" :closable="false" :title="validationReports[version.id]!.ready ? '发布前检查通过' : validationReports[version.id]!.issues.join('；')" />
+          <div v-if="impactReports[version.id]" class="impact-result">
+            <el-alert :type="impactType(impactReports[version.id]!.level)" :closable="false" :title="impactText(impactReports[version.id]!.level)" />
+            <div v-if="impactReports[version.id]!.requestContract || impactReports[version.id]!.responseContract" class="impact-sources"><span v-if="impactReports[version.id]!.requestContract">请求契约：{{ impactReports[version.id]!.requestContract!.contractName }} {{ impactReports[version.id]!.requestContract!.semanticVersion }}</span><span v-if="impactReports[version.id]!.responseContract">返回契约：{{ impactReports[version.id]!.responseContract!.contractName }} {{ impactReports[version.id]!.responseContract!.semanticVersion }}</span></div>
+            <ul v-if="impactReports[version.id]!.changes.length"><li v-for="change in impactReports[version.id]!.changes" :key="`${change.direction}-${change.path}-${change.message}`"><el-tag size="small" :type="change.level === 'BREAKING' ? 'danger' : 'warning'">{{ change.level === 'BREAKING' ? '需创建新版本' : '可按需同步' }}</el-tag><code>{{ change.direction }} {{ change.path }}</code><span>{{ change.message }}</span></li></ul>
+            <p v-for="issue in impactReports[version.id]!.issues" :key="issue" class="impact-issue">{{ issue }}</p>
+          </div>
+          <small class="checksum">内容校验值 {{ version.contentChecksum }}</small>
+        </div>
+      </template>
     </el-drawer>
+
+    <el-dialog v-model="clientGuideVisible" title="连接本地 AI 客户端" width="min(720px, calc(100vw - 32px))">
+      <el-steps :active="3" finish-status="success" simple><el-step title="发布工具" /><el-step title="授权业务服务" /><el-step title="启动 MCP 服务" /></el-steps>
+      <div class="client-guide"><el-alert type="info" :closable="false" title="客户端只连接 MCP 服务，不需要保存 TPIP 的 appKey 或 Secret；本机 MCP 服务负责身份映射和签名。" /><label>本地 MCP 地址</label><code>{{ mcpEndpoint }}</code><label>通用 Streamable HTTP 配置参考</label><el-input :model-value="clientConfig" type="textarea" :rows="7" readonly /><el-button type="primary" @click="copyClientConfig">复制配置</el-button><p>不同客户端的配置文件名称可能不同，但服务器名称和 URL 含义相同。发布工具或调整授权后，请重启 MCP 服务，再让客户端刷新工具列表。</p></div>
+      <template #footer><el-button @click="clientGuideVisible = false">关闭</el-button></template>
+    </el-dialog>
   </section>
 </template>
 
 <style scoped>
-.mcp-workbench>.el-alert{margin-bottom:16px}.mcp-create-button{min-width:190px;color:#fff!important;font-weight:750}.mcp-metrics{margin-top:16px}.mcp-tool-list{overflow:hidden}.mcp-tool-list :deep(.el-table__row){cursor:pointer}.mcp-tool-list strong,.mcp-tool-list code{display:block}.mcp-tool-list code{margin-top:5px;color:#28715d;font-size:10px}.mcp-steps{margin:4px 0 24px}.wizard-pane{min-height:430px;padding:20px 8px 4px}.wizard-copy{margin-bottom:20px;padding:16px 18px;border-left:4px solid var(--mint);background:#eff7f3}.wizard-copy strong,.wizard-copy span{display:block}.wizard-copy strong{font-size:17px}.wizard-copy span{margin-top:6px;color:var(--muted);font-size:11px}.wizard-pane small{display:block;margin-top:6px;color:var(--muted);font-size:10px}.risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.risk-grid label{padding:18px;display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);background:#f8faf9}.risk-grid label span,.risk-grid strong,.risk-grid small{display:block}.risk-grid small{margin-top:5px}.risk-options{margin-top:18px}.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}.review-grid>div{min-height:112px;padding:17px;border:1px solid var(--line);background:#f8faf9}.review-grid span,.review-grid strong,.review-grid code,.review-grid small{display:block}.review-grid span{color:var(--muted);font-size:10px}.review-grid strong{margin-top:8px}.review-grid code,.review-grid small{margin-top:6px;color:#39705f;font-size:10px}.mcp-detail-hero{margin-bottom:18px;padding:22px;border-left:5px solid var(--mint);background:#edf7f2}.mcp-detail-hero span,.mcp-detail-hero code{color:#39705f;font-size:10px}.mcp-detail-hero h3{margin:7px 0;font-size:24px}.mcp-detail-hero p{margin:12px 0 0;color:var(--muted)}.version-card{margin:12px 0;padding:18px;border:1px solid var(--line);background:#fbfcfb}.version-card__head{display:flex;justify-content:space-between;gap:15px}.version-card__head strong{display:block;margin-top:8px}.version-card>p{color:var(--muted);font-size:12px}.version-facts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.version-facts span{padding:6px 9px;background:#edf4f1;color:#3e665a;font-size:10px}.checksum{display:block;margin-top:12px;color:#819089;font:9px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}@media(max-width:1100px){.risk-grid,.review-grid{grid-template-columns:1fr}}
+.mcp-workbench>.el-alert{margin-bottom:16px}.heading-actions{display:flex;gap:10px}.mcp-create-button{min-width:190px;color:#fff!important;font-weight:750}.mcp-metrics{margin-top:16px}.mcp-tool-list{overflow:hidden}.mcp-tool-list :deep(.el-table__row){cursor:pointer}.mcp-tool-list strong,.mcp-tool-list code{display:block}.mcp-tool-list code{margin-top:5px;color:#28715d;font-size:10px}.mcp-steps{margin:4px 0 24px}.wizard-pane{min-height:430px;padding:20px 8px 4px}.wizard-copy{margin-bottom:20px;padding:16px 18px;border-left:4px solid var(--mint);background:#eff7f3}.wizard-copy strong,.wizard-copy span{display:block}.wizard-copy strong{font-size:17px}.wizard-copy span{margin-top:6px;color:var(--muted);font-size:11px}.wizard-pane small{display:block;margin-top:6px;color:var(--muted);font-size:10px}.risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.risk-grid label{padding:18px;display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);background:#f8faf9}.risk-grid label span,.risk-grid strong,.risk-grid small{display:block}.risk-grid small{margin-top:5px}.risk-options{margin-top:18px}.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}.review-grid>div{min-height:112px;padding:17px;border:1px solid var(--line);background:#f8faf9}.review-grid span,.review-grid strong,.review-grid code,.review-grid small{display:block}.review-grid span{color:var(--muted);font-size:10px}.review-grid strong{margin-top:8px}.review-grid code,.review-grid small{margin-top:6px;color:#39705f;font-size:10px}.mcp-detail-hero{margin-bottom:18px;padding:22px;border-left:5px solid var(--mint);background:#edf7f2}.mcp-detail-hero span,.mcp-detail-hero code{color:#39705f;font-size:10px}.mcp-detail-hero h3{margin:7px 0;font-size:24px}.mcp-detail-hero p{margin:12px 0 0;color:var(--muted)}.version-card{margin:12px 0;padding:18px;border:1px solid var(--line);background:#fbfcfb}.version-card__head{display:flex;justify-content:space-between;gap:15px}.version-card__head strong{display:block;margin-top:8px}.version-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.version-card>p{color:var(--muted);font-size:12px}.version-facts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.version-facts span{padding:6px 9px;background:#edf4f1;color:#3e665a;font-size:10px}.impact-result{margin-top:12px}.impact-sources{display:flex;gap:12px;margin:10px 0;color:#587068;font-size:10px}.impact-result ul{padding:0;list-style:none}.impact-result li{display:grid;grid-template-columns:105px 150px 1fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}.impact-result li code{color:#286e5b}.impact-issue{color:#8a6423;font-size:11px}.client-guide{display:flex;flex-direction:column;gap:12px;padding:22px 4px 4px}.client-guide label{margin-top:5px;font-weight:700}.client-guide>code{padding:12px;background:#edf4f1;color:#286e5b}.client-guide .el-button{align-self:flex-start}.client-guide p{color:var(--muted);font-size:11px;line-height:1.7}.checksum{display:block;margin-top:12px;color:#819089;font:9px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}@media(max-width:1100px){.risk-grid,.review-grid{grid-template-columns:1fr}.impact-result li{grid-template-columns:1fr}.heading-actions{flex-wrap:wrap}}
 </style>
